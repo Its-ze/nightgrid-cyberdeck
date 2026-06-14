@@ -37,14 +37,19 @@ const normalizeUsbId = (value?: string) => value?.toUpperCase().padStart(4, "0")
 
 const classifyPort = (port: ListedPort): DevicePort => {
   const manufacturer = port.manufacturer ?? "";
+  const listedName = "friendlyName" in port && typeof port.friendlyName === "string" ? port.friendlyName : "";
   const vendorId = normalizeUsbId(port.vendorId);
   const productId = normalizeUsbId(port.productId);
   const pnpId = port.pnpId ?? "";
-  const haystack = `${manufacturer} ${port.path} ${pnpId} ${vendorId ?? ""}:${productId ?? ""}`.toLowerCase();
+  const haystack = `${manufacturer} ${listedName} ${port.path} ${pnpId} ${vendorId ?? ""}:${productId ?? ""}`.toLowerCase();
   const tags: string[] = [];
   let suggestedRole: DeviceRole = "console";
 
-  const isTDeck = haystack.includes("t-deck") || haystack.includes("tdeck") || haystack.includes("lilygo t-deck");
+  const isTDeck =
+    haystack.includes("t-deck") ||
+    haystack.includes("tdeck") ||
+    haystack.includes("lilygo t-deck") ||
+    (vendorId === "303A" && productId === "1001");
   const isFlipper = haystack.includes("flipper") || (vendorId === "0483" && productId === "5740");
 
   if (isTDeck) {
@@ -77,7 +82,7 @@ const classifyPort = (port: ListedPort): DevicePort => {
   }
 
   const uniqueTags = [...new Set(tags)];
-  const friendlyName = [manufacturer, port.path, vendorId && productId ? `${vendorId}:${productId}` : ""]
+  const friendlyName = [listedName || manufacturer, port.path, vendorId && productId ? `${vendorId}:${productId}` : ""]
     .filter(Boolean)
     .join(" ");
 

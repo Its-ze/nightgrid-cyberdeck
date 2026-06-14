@@ -311,7 +311,7 @@ export function App() {
                       <RoleIcon size={20} />
                       <div>
                         <h3>{port.path}</h3>
-                        <p>{port.manufacturer || port.friendlyName}</p>
+                        <p>{port.friendlyName || port.manufacturer}</p>
                       </div>
                     </div>
 
@@ -468,7 +468,7 @@ export function App() {
                 <option value="">Select port</option>
                 {(meshPorts.length ? meshPorts : ports).map((port) => (
                   <option value={port.path} key={port.path}>
-                    {port.path} {port.manufacturer ? `- ${port.manufacturer}` : ""}
+                    {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
                   </option>
                 ))}
               </select>
