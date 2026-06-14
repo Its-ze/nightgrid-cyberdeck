@@ -1,17 +1,20 @@
 {
   "name": "nightgrid-cyberdeck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NightGrid Cyberdeck is a dark cross-platform USB field deck for Heltec V3, GPS modules, Raspberry Pi Picos, and serial consoles.",
-  "author": "Its-ze",
+  "author": {
+    "name": "Its-ze",
+    "email": "z.skeens@itsolutions.digital"
+  },
   "license": "MIT",
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.node.json",
     "typecheck": "tsc --noEmit",
-    "dist": "npm run build && electron-builder",
-    "dist:linux": "npm run build && electron-builder --linux AppImage deb",
-    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
     "rebuild:native": "electron-builder install-app-deps"
   },
   "dependencies": {
