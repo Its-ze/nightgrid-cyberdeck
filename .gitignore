@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-electron/
+release-builds/
+.vite/
+*.log
+*.tsbuildinfo
+nightgrid-session*.json
+.env
+.env.*
+!.env.example

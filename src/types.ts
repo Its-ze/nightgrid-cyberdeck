@@ -1,0 +1,82 @@
+export type DeviceRole = "heltec" | "gps" | "pico" | "console";
+
+export interface DevicePort {
+  path: string;
+  friendlyName: string;
+  manufacturer?: string;
+  serialNumber?: string;
+  vendorId?: string;
+  productId?: string;
+  pnpId?: string;
+  suggestedRole: DeviceRole;
+  tags: string[];
+  isKnownBoard: boolean;
+}
+
+export interface SerialSession {
+  id: string;
+  path: string;
+  baudRate: number;
+  role: DeviceRole;
+  openedAt: string;
+}
+
+export interface SerialEvent {
+  sessionId: string;
+  path: string;
+  role: DeviceRole;
+  text: string;
+  at: string;
+}
+
+export interface SerialStatusEvent {
+  sessionId?: string;
+  path?: string;
+  status: "connected" | "disconnected" | "error" | "message";
+  message: string;
+  at: string;
+}
+
+export interface GpsFix {
+  sessionId: string;
+  path: string;
+  lat?: number;
+  lon?: number;
+  altitudeMeters?: number;
+  speedKnots?: number;
+  satellites?: number;
+  fixQuality?: string;
+  utcTime?: string;
+  raw: string;
+  updatedAt: string;
+}
+
+export interface CommandResult {
+  ok: boolean;
+  command: string;
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+export interface NightGridApi {
+  listDevices: () => Promise<DevicePort[]>;
+  connectDevice: (request: { path: string; baudRate: number; role: DeviceRole }) => Promise<SerialSession>;
+  disconnectDevice: (sessionId: string) => Promise<void>;
+  writeDevice: (request: { sessionId: string; data: string }) => Promise<void>;
+  probeMeshCli: () => Promise<CommandResult>;
+  meshInfo: (request: { path: string }) => Promise<CommandResult>;
+  meshNodes: (request: { path: string }) => Promise<CommandResult>;
+  meshSendText: (request: { path: string; message: string; channelIndex?: number }) => Promise<CommandResult>;
+  getPlatform: () => Promise<{ platform: NodeJS.Platform; version: string }>;
+  openExternal: (url: string) => Promise<void>;
+  onSerialData: (callback: (event: SerialEvent) => void) => () => void;
+  onSerialStatus: (callback: (event: SerialStatusEvent) => void) => () => void;
+  onGpsFix: (callback: (event: GpsFix) => void) => () => void;
+}
+
+declare global {
+  interface Window {
+    nightgrid: NightGridApi;
+  }
+}
