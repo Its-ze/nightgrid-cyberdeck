@@ -23,6 +23,16 @@ const previewPorts: DevicePort[] = [
     isKnownBoard: true
   },
   {
+    path: "/dev/ttyACM2",
+    friendlyName: "Espressif Systems LilyGO T-Deck 303A:1001",
+    manufacturer: "Espressif Systems LilyGO T-Deck",
+    vendorId: "303A",
+    productId: "1001",
+    suggestedRole: "tdeck",
+    tags: ["T-Deck", "ESP32-S3", "Meshtastic"],
+    isKnownBoard: true
+  },
+  {
     path: "/dev/ttyACM0",
     friendlyName: "Raspberry Pi Pico 2E8A:0005",
     manufacturer: "Raspberry Pi",
@@ -30,6 +40,16 @@ const previewPorts: DevicePort[] = [
     productId: "0005",
     suggestedRole: "pico",
     tags: ["Pico"],
+    isKnownBoard: true
+  },
+  {
+    path: "/dev/ttyACM1",
+    friendlyName: "Flipper Zero USB CLI 0483:5740",
+    manufacturer: "Flipper Devices Inc.",
+    vendorId: "0483",
+    productId: "5740",
+    suggestedRole: "flipper",
+    tags: ["Flipper Zero", "CLI"],
     isKnownBoard: true
   },
   {
@@ -86,7 +106,15 @@ export const createPreviewApi = (): NightGridApi => {
       };
       sessions.set(session.id, session);
       emitStatus({ sessionId: session.id, path, status: "connected", message: `${path} connected in preview mode` });
-      emitData(session, role === "pico" ? "MicroPython v1.x on Raspberry Pi Pico\r\n>>>" : "NightGrid preview stream ready\r\n");
+      const greeting =
+        role === "pico"
+          ? "MicroPython v1.x on Raspberry Pi Pico\r\n>>>"
+          : role === "flipper"
+            ? "Flipper Zero CLI preview\r\n>: "
+            : role === "tdeck"
+              ? "T-Deck Meshtastic USB serial preview ready\r\n"
+              : "NightGrid preview stream ready\r\n";
+      emitData(session, greeting);
       if (role === "gps") {
         const fix: GpsFix = {
           sessionId: session.id,
@@ -121,7 +149,7 @@ export const createPreviewApi = (): NightGridApi => {
     },
     probeMeshCli: async () => result("meshtastic --version", "Meshtastic CLI preview available\n"),
     meshInfo: async ({ path }: { path: string }) =>
-      result(`meshtastic --port ${path} --info`, "Preview Heltec V3\nfirmware: meshtastic\nrole: CLIENT\n"),
+      result(`meshtastic --port ${path} --info`, "Preview mesh radio\nhardware: Heltec V3 or T-Deck\nfirmware: meshtastic\nrole: CLIENT\n"),
     meshNodes: async ({ path }: { path: string }) =>
       result(`meshtastic --port ${path} --nodes`, "!preview Node, last heard now, SNR 8.5\n"),
     meshSendText: async ({ path, message }: { path: string; message: string; channelIndex?: number }) =>

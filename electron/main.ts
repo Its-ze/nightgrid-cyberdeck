@@ -44,7 +44,16 @@ const classifyPort = (port: ListedPort): DevicePort => {
   const tags: string[] = [];
   let suggestedRole: DeviceRole = "console";
 
-  if (haystack.includes("heltec") || haystack.includes("cp210") || haystack.includes("esp32") || vendorId === "303A") {
+  const isTDeck = haystack.includes("t-deck") || haystack.includes("tdeck") || haystack.includes("lilygo t-deck");
+  const isFlipper = haystack.includes("flipper") || (vendorId === "0483" && productId === "5740");
+
+  if (isTDeck) {
+    tags.push("T-Deck", "ESP32-S3", "Meshtastic");
+    suggestedRole = "tdeck";
+  } else if (isFlipper) {
+    tags.push("Flipper Zero", "CLI");
+    suggestedRole = "flipper";
+  } else if (haystack.includes("heltec") || haystack.includes("cp210") || haystack.includes("esp32") || vendorId === "303A") {
     tags.push("ESP32", "Heltec/Mesh");
     suggestedRole = "heltec";
   }

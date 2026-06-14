@@ -1,4 +1,4 @@
-export type DeviceRole = "heltec" | "gps" | "pico" | "console";
+export type DeviceRole = "heltec" | "tdeck" | "gps" | "pico" | "flipper" | "console";
 
 export interface DevicePort {
   path: string;

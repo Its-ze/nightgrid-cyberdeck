@@ -20,7 +20,7 @@ mkdir -p "${desktop_dir}"
 cat > "${desktop_dir}/nightgrid-cyberdeck.desktop" <<EOF
 [Desktop Entry]
 Name=NightGrid Cyberdeck
-Comment=USB field console for Heltec, GPS, Pico, and serial devices
+Comment=USB field console for Heltec, T-Deck, Flipper, GPS, Pico, and serial devices
 Exec=${target}
 Terminal=false
 Type=Application

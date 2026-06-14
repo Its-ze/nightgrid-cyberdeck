@@ -40,19 +40,25 @@ const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 
 const roleLabels: Record<DeviceRole, string> = {
   heltec: "Heltec mesh",
+  tdeck: "T-Deck mesh",
   gps: "GPS NMEA",
   pico: "Pico console",
+  flipper: "Flipper Zero",
   console: "Serial console"
 };
 
 const roleIcons: Record<DeviceRole, typeof Radio> = {
   heltec: Radio,
+  tdeck: Radio,
   gps: Satellite,
   pico: Cpu,
+  flipper: Cpu,
   console: Terminal
 };
 
 const defaultBaud = (role: DeviceRole) => (role === "gps" ? 9600 : 115200);
+
+const isMeshRole = (role?: DeviceRole) => role === "heltec" || role === "tdeck";
 
 const formatTime = (iso: string) =>
   new Intl.DateTimeFormat(undefined, {
@@ -96,7 +102,7 @@ export function App() {
 
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
   const connectedPaths = new Set(sessions.map((session) => session.path));
-  const heltecPorts = ports.filter((port) => port.suggestedRole === "heltec" || roleByPath[port.path] === "heltec");
+  const meshPorts = ports.filter((port) => isMeshRole(port.suggestedRole) || isMeshRole(roleByPath[port.path]));
 
   const groupedPorts = useMemo(() => {
     const known = ports.filter((port) => port.isKnownBoard);
@@ -131,8 +137,8 @@ export function App() {
         return next;
       });
       if (!meshPath) {
-        const heltec = nextPorts.find((port) => port.suggestedRole === "heltec");
-        if (heltec) setMeshPath(heltec.path);
+        const meshPort = nextPorts.find((port) => isMeshRole(port.suggestedRole));
+        if (meshPort) setMeshPath(meshPort.path);
       }
       addLog({
         channel: "status",
@@ -451,7 +457,7 @@ export function App() {
           <section className="panel">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">Heltec V3</p>
+                <p className="eyebrow">Heltec / T-Deck</p>
                 <h2>Mesh CLI</h2>
               </div>
               <Radio size={22} />
@@ -460,7 +466,7 @@ export function App() {
               Mesh port
               <select value={meshPath} onChange={(event) => setMeshPath(event.target.value)}>
                 <option value="">Select port</option>
-                {(heltecPorts.length ? heltecPorts : ports).map((port) => (
+                {(meshPorts.length ? meshPorts : ports).map((port) => (
                   <option value={port.path} key={port.path}>
                     {port.path} {port.manufacturer ? `- ${port.manufacturer}` : ""}
                   </option>
@@ -529,6 +535,30 @@ export function App() {
               </button>
               <button className="icon-button" disabled={!selectedSession} onClick={() => writeSelected("import os; os.listdir()\r\n")}>
                 List files
+              </button>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Flipper Zero</p>
+                <h2>CLI Keys</h2>
+              </div>
+              <Cpu size={22} />
+            </div>
+            <div className="button-grid">
+              <button className="icon-button" disabled={!selectedSession} onClick={() => writeSelected("help\r\n")}>
+                Help
+              </button>
+              <button className="icon-button" disabled={!selectedSession} onClick={() => writeSelected("device_info\r\n")}>
+                Device info
+              </button>
+              <button className="icon-button" disabled={!selectedSession} onClick={() => writeSelected("storage list /ext\r\n")}>
+                Storage
+              </button>
+              <button className="icon-button" disabled={!selectedSession} onClick={() => writeSelected("power info\r\n")}>
+                Power
               </button>
             </div>
           </section>

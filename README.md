@@ -5,6 +5,8 @@ NightGrid Cyberdeck is a dark desktop field console for a Linux laptop or Window
 It is built for:
 
 - Heltec V3 / ESP32-S3 mesh boards over USB-C
+- LilyGO T-Deck mesh radios when they appear as USB serial
+- Flipper Zero over its USB CLI serial port
 - USB GPS modules that emit NMEA sentences
 - Raspberry Pi Pico boards running MicroPython or CircuitPython
 - Any extra serial console you want on the deck
@@ -13,12 +15,13 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 
 ## Features
 
-- Serial port scanner with Heltec, Pico, GPS, CP210x, CH340, and ESP32 hints.
-- Role-based connect presets for Heltec mesh, GPS NMEA, Pico console, and generic serial.
+- Serial port scanner with Heltec, T-Deck, Flipper Zero, Pico, GPS, CP210x, CH340, and ESP32 hints.
+- Role-based connect presets for Heltec/T-Deck mesh, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Live serial console with RX/TX/status lanes.
 - GPS fix panel for GGA/RMC NMEA sentences.
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
-- Optional Meshtastic CLI bridge for Heltec info, node list, and text sends.
+- Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
+- Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
 
 ## Install
@@ -63,7 +66,7 @@ On Windows:
 py -m pip install --user meshtastic
 ```
 
-The CLI needs exclusive access to the Heltec serial port. Disconnect the live NightGrid serial session before running `Info`, `Nodes`, or `Mesh`.
+The CLI needs exclusive access to the Heltec or T-Deck serial port. Disconnect the live NightGrid serial session before running `Info`, `Nodes`, or `Mesh`.
 
 ## Development
 
@@ -99,8 +102,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
 The release workflow uploads:
