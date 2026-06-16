@@ -213,16 +213,18 @@
             <a class="button primary" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.AppImage">Download Linux AppImage</a>
             <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Windows-x64-Setup.exe">Download Windows Setup</a>
             <a class="button" href="install-linux.sh">Linux Update Script</a>
+            <a class="button" href="uninstall-linux.sh">Linux Uninstall Script</a>
+            <a class="button" href="uninstall-windows.ps1">Windows Uninstall Script</a>
             <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck">View GitHub</a>
           </div>
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.5</span>
+            <span>NIGHTGRID 0.1.6</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
-            <div><span>Updater</span><strong>In-app button</strong></div>
+            <div><span>Updater</span><strong>Install / uninstall</strong></div>
             <div><span>Heltec / T-Deck</span><strong>Mesh CLI ready</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
             <div><span>GPS NMEA</span><strong>GGA/RMC parser</strong></div>
@@ -245,6 +247,16 @@
           <h2>USB Notes</h2>
           <p>On Linux, add your user to the serial group if ports cannot open. Meshtastic CLI commands need exclusive port access.</p>
           <code>sudo usermod -aG dialout "$USER"</code>
+        </article>
+        <article class="card">
+          <h2>Linux Uninstall</h2>
+          <p>Removes the AppImage, launcher, and installed deb package if present. App settings are preserved unless you opt into purge.</p>
+          <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/uninstall-linux.sh | bash</code>
+        </article>
+        <article class="card">
+          <h2>Windows Uninstall</h2>
+          <p>Finds the registered NightGrid uninstaller and runs it, then cleans standard shortcuts.</p>
+          <code>irm https://its-ze.github.io/nightgrid-cyberdeck/uninstall-windows.ps1 | iex</code>
         </article>
       </section>
       <footer>

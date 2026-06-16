@@ -23,6 +23,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
+- Uninstall scripts for Linux and Windows, with optional app-settings purge.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
 
 ## Install / Update
@@ -44,6 +45,20 @@ irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex
 ```
 
 The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
+
+Linux uninstall:
+
+```bash
+curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/uninstall-linux.sh | bash
+```
+
+Windows uninstall from PowerShell:
+
+```powershell
+irm https://its-ze.github.io/nightgrid-cyberdeck/uninstall-windows.ps1 | iex
+```
+
+Uninstall preserves app settings by default. Set `NIGHTGRID_PURGE_DATA=1` before running the uninstall script if you also want local app settings removed.
 
 ## Linux USB Access
 
@@ -105,8 +120,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.5
-git push origin v0.1.5
+git tag v0.1.6
+git push origin v0.1.6
 ```
 
 The release workflow uploads:
