@@ -97,6 +97,8 @@ export function App() {
   const [meshChannel, setMeshChannel] = useState("0");
   const [meshPath, setMeshPath] = useState("");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState("");
   const logCounter = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -219,6 +221,30 @@ export function App() {
     );
   };
 
+  const installUpdate = async () => {
+    setUpdateBusy(true);
+    setUpdateMessage("");
+    try {
+      const result = await api.installUpdate();
+      setUpdateMessage(result.message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        text: result.message
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update failed.";
+      setUpdateMessage(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        text: message
+      });
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
   useEffect(() => {
     refreshDevices();
     api.getPlatform().then(setPlatform).catch(() => undefined);
@@ -276,6 +302,11 @@ export function App() {
             <Activity size={16} />
             {platform ? `${platform.platform} v${platform.version}` : "Starting"}
           </span>
+          {updateMessage ? <span className="status-pill update-pill">{updateMessage}</span> : null}
+          <button className="icon-button" onClick={installUpdate} disabled={updateBusy}>
+            <Download size={18} />
+            {updateBusy ? "Updating" : "Update"}
+          </button>
           <button className="icon-button primary" onClick={refreshDevices} disabled={isRefreshing}>
             <RefreshCw size={18} className={isRefreshing ? "spin" : ""} />
             Scan

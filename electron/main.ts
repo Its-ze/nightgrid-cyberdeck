@@ -1,4 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
+import fs from "node:fs";
+import { promises as fsp } from "node:fs";
+import https from "node:https";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { SerialPort } from "serialport";
@@ -9,7 +13,8 @@ import type {
   GpsFix,
   SerialEvent,
   SerialSession,
-  SerialStatusEvent
+  SerialStatusEvent,
+  UpdateResult
 } from "../src/types";
 
 type ListedPort = Awaited<ReturnType<typeof SerialPort.list>>[number];
@@ -20,6 +25,9 @@ interface LiveSession extends SerialSession {
 }
 
 const sessions = new Map<string, LiveSession>();
+const releaseBaseUrl = "https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download";
+const linuxAppImageAsset = "NightGrid-Cyberdeck-Linux-x64.AppImage";
+const windowsSetupAsset = "NightGrid-Cyberdeck-Windows-x64-Setup.exe";
 
 const now = () => new Date().toISOString();
 
@@ -205,6 +213,115 @@ const writeSerialPort = (session: LiveSession, data: string) =>
     });
   });
 
+const downloadFile = (url: string, target: string, redirects = 0) =>
+  new Promise<void>((resolve, reject) => {
+    const request = https.get(url, { headers: { "User-Agent": "NightGrid-Cyberdeck" } }, (response) => {
+      const status = response.statusCode ?? 0;
+      const location = response.headers.location;
+
+      if (status >= 300 && status < 400 && location && redirects < 5) {
+        response.resume();
+        const nextUrl = new URL(location, url).toString();
+        downloadFile(nextUrl, target, redirects + 1).then(resolve).catch(reject);
+        return;
+      }
+
+      if (status < 200 || status >= 300) {
+        response.resume();
+        reject(new Error(`Download failed with HTTP ${status}`));
+        return;
+      }
+
+      const file = fs.createWriteStream(target, { mode: 0o755 });
+      response.pipe(file);
+      file.on("finish", () => file.close((error) => (error ? reject(error) : resolve())));
+      file.on("error", reject);
+    });
+
+    request.on("error", reject);
+  });
+
+const writeLinuxDesktopEntry = async (target: string) => {
+  const desktopDir = path.join(os.homedir(), ".local", "share", "applications");
+  await fsp.mkdir(desktopDir, { recursive: true });
+  const desktopFile = path.join(desktopDir, "nightgrid-cyberdeck.desktop");
+  const entry = [
+    "[Desktop Entry]",
+    "Name=NightGrid Cyberdeck",
+    "Comment=USB field console for Heltec, T-Deck, Flipper, GPS, Pico, and serial devices",
+    `Exec=${target}`,
+    "Terminal=false",
+    "Type=Application",
+    "Categories=Utility;Development;",
+    ""
+  ].join("\n");
+  await fsp.writeFile(desktopFile, entry, "utf8");
+};
+
+const installLinuxUpdate = async (): Promise<UpdateResult> => {
+  const url = `${releaseBaseUrl}/${linuxAppImageAsset}`;
+  const target = process.env.APPIMAGE || path.join(os.homedir(), "Applications", "NightGrid-Cyberdeck.AppImage");
+  const installDir = path.dirname(target);
+  await fsp.mkdir(installDir, { recursive: true });
+  const tmp = path.join(installDir, `.NightGrid-Cyberdeck.AppImage.${process.pid}.download`);
+
+  try {
+    await downloadFile(url, tmp);
+    await fsp.chmod(tmp, 0o755);
+    await fsp.rename(tmp, target);
+    await writeLinuxDesktopEntry(target);
+  } catch (error) {
+    await fsp.rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
+
+  return {
+    ok: true,
+    platform: process.platform,
+    version: app.getVersion(),
+    target,
+    url,
+    restartRequired: true,
+    message: `Updated NightGrid at ${target}. Restart the app to run the new version.`
+  };
+};
+
+const installWindowsUpdate = async (): Promise<UpdateResult> => {
+  const url = `${releaseBaseUrl}/${windowsSetupAsset}`;
+  const target = path.join(app.getPath("temp"), `NightGrid-Cyberdeck-Setup-${Date.now()}.exe`);
+  await downloadFile(url, target);
+  const child = spawn(target, [], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: false
+  });
+  child.unref();
+
+  return {
+    ok: true,
+    platform: process.platform,
+    version: app.getVersion(),
+    target,
+    url,
+    restartRequired: true,
+    message: "Downloaded and launched the latest Windows setup. Close NightGrid if the installer asks before updating."
+  };
+};
+
+const installLatestUpdate = async (): Promise<UpdateResult> => {
+  if (process.platform === "linux") return installLinuxUpdate();
+  if (process.platform === "win32") return installWindowsUpdate();
+
+  return {
+    ok: false,
+    platform: process.platform,
+    version: app.getVersion(),
+    url: "https://its-ze.github.io/nightgrid-cyberdeck/",
+    restartRequired: false,
+    message: "Automatic updates are available for Linux AppImage and Windows setup builds only."
+  };
+};
+
 const registerIpc = () => {
   ipcMain.handle("devices:list", async () => {
     const ports = await SerialPort.list();
@@ -319,6 +436,8 @@ const registerIpc = () => {
     platform: process.platform,
     version: app.getVersion()
   }));
+
+  ipcMain.handle("system:install-update", async () => installLatestUpdate());
 
   ipcMain.handle("system:open-external", async (_, url: string) => {
     if (!url.startsWith("https://") && !url.startsWith("http://")) return;

@@ -212,32 +212,33 @@
           <div class="actions">
             <a class="button primary" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.AppImage">Download Linux AppImage</a>
             <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Windows-x64-Setup.exe">Download Windows Setup</a>
+            <a class="button" href="install-linux.sh">Linux Update Script</a>
             <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck">View GitHub</a>
           </div>
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.4</span>
+            <span>NIGHTGRID 0.1.5</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
+            <div><span>Updater</span><strong>In-app button</strong></div>
             <div><span>Heltec / T-Deck</span><strong>Mesh CLI ready</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
             <div><span>GPS NMEA</span><strong>GGA/RMC parser</strong></div>
-            <div><span>Pico REPL</span><strong>Ctrl keys armed</strong></div>
           </div>
         </section>
       </header>
 
       <section class="grid">
         <article class="card">
-          <h2>Linux One-Line Install</h2>
-          <p>Downloads the latest AppImage, marks it executable, and creates a desktop launcher.</p>
+          <h2>Linux Install / Update</h2>
+          <p>Downloads the latest AppImage, marks it executable, and replaces the existing launcher target if already installed.</p>
           <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
         </article>
         <article class="card">
-          <h2>Windows One-Line Install</h2>
-          <p>Downloads the latest Windows setup executable and launches the installer.</p>
+          <h2>Windows Install / Update</h2>
+          <p>Downloads a fresh Windows setup executable and launches the installer/updater.</p>
           <code>irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex</code>
         </article>
         <article class="card">

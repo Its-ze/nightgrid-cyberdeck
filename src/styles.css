@@ -136,6 +136,13 @@ input:disabled {
   background: rgba(13, 18, 28, 0.7);
 }
 
+.update-pill {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;

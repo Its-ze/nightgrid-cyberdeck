@@ -7,7 +7,8 @@ import type {
   NightGridApi,
   SerialEvent,
   SerialSession,
-  SerialStatusEvent
+  SerialStatusEvent,
+  UpdateResult
 } from "../src/types";
 
 const on = <T>(channel: string, callback: (event: T) => void) => {
@@ -29,6 +30,7 @@ const api: NightGridApi = {
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) =>
     ipcRenderer.invoke("mesh:send-text", request) as Promise<CommandResult>,
   getPlatform: () => ipcRenderer.invoke("system:platform") as Promise<{ platform: NodeJS.Platform; version: string }>,
+  installUpdate: () => ipcRenderer.invoke("system:install-update") as Promise<UpdateResult>,
   openExternal: (url: string) => ipcRenderer.invoke("system:open-external", url) as Promise<void>,
   onSerialData: (callback: (event: SerialEvent) => void) => on("serial:data", callback),
   onSerialStatus: (callback: (event: SerialStatusEvent) => void) => on("serial:status", callback),

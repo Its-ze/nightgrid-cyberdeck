@@ -155,6 +155,14 @@ export const createPreviewApi = (): NightGridApi => {
     meshSendText: async ({ path, message }: { path: string; message: string; channelIndex?: number }) =>
       result(`meshtastic --port ${path} --sendtext ${message}`, "Preview message queued\n"),
     getPlatform: async () => ({ platform: "browser" as NodeJS.Platform, version: "preview" }),
+    installUpdate: async () => ({
+      ok: true,
+      platform: "browser" as NodeJS.Platform,
+      version: "preview",
+      restartRequired: false,
+      url: "https://its-ze.github.io/nightgrid-cyberdeck/",
+      message: "Preview updater ready. The installed app uses this button to update itself."
+    }),
     openExternal: async (url: string) => {
       window.open(url, "_blank", "noopener,noreferrer");
     },

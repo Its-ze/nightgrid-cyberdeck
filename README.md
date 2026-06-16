@@ -22,25 +22,28 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
+- In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
 
-## Install
+## Install / Update
 
 Download installers from the GitHub Pages installer page:
 
 https://its-ze.github.io/nightgrid-cyberdeck/
 
-Linux quick install:
+Linux quick install or update:
 
 ```bash
 curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash
 ```
 
-Windows quick install from PowerShell:
+Windows quick install or update from PowerShell:
 
 ```powershell
 irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex
 ```
+
+The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
 
 ## Linux USB Access
 
@@ -102,8 +105,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.4
-git push origin v0.1.4
+git tag v0.1.5
+git push origin v0.1.5
 ```
 
 The release workflow uploads:

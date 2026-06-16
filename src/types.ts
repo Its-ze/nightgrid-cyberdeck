@@ -59,6 +59,16 @@ export interface CommandResult {
   stderr: string;
 }
 
+export interface UpdateResult {
+  ok: boolean;
+  platform: NodeJS.Platform;
+  version: string;
+  message: string;
+  target?: string;
+  url?: string;
+  restartRequired: boolean;
+}
+
 export interface NightGridApi {
   listDevices: () => Promise<DevicePort[]>;
   connectDevice: (request: { path: string; baudRate: number; role: DeviceRole }) => Promise<SerialSession>;
@@ -69,6 +79,7 @@ export interface NightGridApi {
   meshNodes: (request: { path: string }) => Promise<CommandResult>;
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) => Promise<CommandResult>;
   getPlatform: () => Promise<{ platform: NodeJS.Platform; version: string }>;
+  installUpdate: () => Promise<UpdateResult>;
   openExternal: (url: string) => Promise<void>;
   onSerialData: (callback: (event: SerialEvent) => void) => () => void;
   onSerialStatus: (callback: (event: SerialStatusEvent) => void) => () => void;
