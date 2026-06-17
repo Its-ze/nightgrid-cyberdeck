@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Cable,
+  Clipboard,
   Cpu,
   Crosshair,
   Download,
+  Gauge,
   MapPin,
   Plug,
   Power,
@@ -13,8 +15,10 @@ import {
   Satellite,
   Send,
   ShieldCheck,
+  Trash2,
   Terminal,
-  Usb
+  Usb,
+  Zap
 } from "lucide-react";
 import { createPreviewApi } from "./previewApi";
 import type {
@@ -36,6 +40,8 @@ interface LogEntry {
   role?: DeviceRole;
   text: string;
 }
+
+type LogFilter = "all" | "rx" | "tx" | "status";
 
 const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 const gpsFreshMs = 6000;
@@ -167,6 +173,7 @@ export function App() {
   const [roleByPath, setRoleByPath] = useState<Record<string, DeviceRole>>({});
   const [baudByPath, setBaudByPath] = useState<Record<string, number>>({});
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logFilter, setLogFilter] = useState<LogFilter>("all");
   const [gpsFix, setGpsFix] = useState<GpsFix | null>(null);
   const [gpsPath, setGpsPath] = useState("");
   const [gpsBaud, setGpsBaud] = useState(9600);
@@ -196,6 +203,8 @@ export function App() {
   const [esp32AutoConnect, setEsp32AutoConnect] = useState(true);
   const [esp32Busy, setEsp32Busy] = useState(false);
   const [esp32Output, setEsp32Output] = useState("ESP32 module output will appear here.");
+  const [macroBusy, setMacroBusy] = useState("");
+  const [macroOutput, setMacroOutput] = useState("Command deck ready.");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
@@ -223,6 +232,24 @@ export function App() {
   const gpsFixAgeMs = gpsLastFixAt === null ? null : Math.max(0, gpsNow - gpsLastFixAt);
   const gpsCanPush = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
   const gpsStatus = formatGpsStatus(gpsFix, gpsFixAgeMs);
+  const knownPortCount = ports.filter((port) => port.isKnownBoard).length;
+  const logStats = useMemo(
+    () => ({
+      all: logs.length,
+      rx: logs.filter((entry) => entry.channel === "rx").length,
+      tx: logs.filter((entry) => entry.channel === "tx").length,
+      status: logs.filter((entry) => entry.channel === "status").length
+    }),
+    [logs]
+  );
+  const visibleLogs = useMemo(
+    () => (logFilter === "all" ? logs : logs.filter((entry) => entry.channel === logFilter)),
+    [logFilter, logs]
+  );
+  const latestEvent = logs[logs.length - 1];
+  const deckState = sessions.length > 0 ? "Online" : ports.length > 0 ? "Ready" : "Standby";
+  const selectedRoleLabel = selectedSession ? roleLabels[selectedSession.role] : "No session";
+  const selectedPathLabel = selectedSession?.path ?? "No port selected";
 
   const groupedPorts = useMemo(() => {
     const known = ports.filter((port) => port.isKnownBoard);
@@ -388,6 +415,48 @@ export function App() {
     if (!payload) return;
     await writeSession(selectedSession, payload);
     if (!data) setSerialInput("");
+  };
+
+  const copyLogs = async () => {
+    const text = logs
+      .map((entry) => `[${formatTime(entry.at)}] ${entry.channel.toUpperCase()} ${entry.path ?? "system"} ${entry.text}`)
+      .join("\n");
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        text: `Copied ${logs.length} log line${logs.length === 1 ? "" : "s"}.`
+      });
+    } catch (error) {
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        text: error instanceof Error ? error.message : "Copy logs failed."
+      });
+    }
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+  };
+
+  const sendSelectedHelp = async () => {
+    if (!selectedSession) return;
+    const payload = selectedSession.role === "flipper" ? "help\r\n" : "help()\r\n";
+    await writeSession(selectedSession, payload);
+  };
+
+  const sendSelectedStatus = async () => {
+    if (!selectedSession) return;
+    const payload =
+      selectedSession.role === "flipper"
+        ? "device_info\r\n"
+        : selectedSession.role === "gps"
+          ? "$PMTK605*31\r\n"
+          : "import sys; print(sys.platform)\r\n";
+    await writeSession(selectedSession, payload);
   };
 
   const runMeshCommand = async (action: () => Promise<CommandResult>) => {
@@ -599,6 +668,29 @@ export function App() {
     await runEsp32Action(label, (session) => writeSession(session, data));
   };
 
+  const runDeckMacro = async (label: string, action: () => Promise<void>) => {
+    setMacroBusy(label);
+    try {
+      await action();
+      setMacroOutput(`${label} complete.`);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        text: `Command Deck: ${label} complete.`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${label} failed.`;
+      setMacroOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        text: `Command Deck: ${message}`
+      });
+    } finally {
+      setMacroBusy("");
+    }
+  };
+
   const installUpdate = async () => {
     setUpdateBusy(true);
     setUpdateMessage("");
@@ -783,7 +875,7 @@ export function App() {
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
-  }, [logs]);
+  }, [logFilter, visibleLogs.length]);
 
   useEffect(() => {
     if (!gpsAutoPush || !gpsFix || !gpsCanPush || !donglePath || gpsPushBusy || gpsLastFixAt === null) return;
@@ -795,12 +887,68 @@ export function App() {
     void pushGpsFix(gpsFix);
   }, [gpsAutoPush, gpsFix, gpsCanPush, gpsLastFixAt, donglePath, gpsPushBusy]);
 
+  const macroButtons = [
+    {
+      label: "Selected help",
+      icon: Terminal,
+      disabled: !selectedSession,
+      action: () => runDeckMacro("Selected help", sendSelectedHelp)
+    },
+    {
+      label: "Selected status",
+      icon: Gauge,
+      disabled: !selectedSession,
+      action: () => runDeckMacro("Selected status", sendSelectedStatus)
+    },
+    {
+      label: "Mesh nodes",
+      icon: Radio,
+      disabled: meshBusy || !meshPath,
+      action: () => runDeckMacro("Mesh nodes", () => runMeshCommand(() => api.meshNodes({ path: meshPath })))
+    },
+    {
+      label: "GPS push",
+      icon: MapPin,
+      disabled: !gpsCanPush || !donglePath || gpsPushBusy,
+      action: () => runDeckMacro("GPS push", () => pushGpsFix())
+    },
+    {
+      label: "Dongle status",
+      icon: Activity,
+      disabled: dongleBusy || !donglePath,
+      action: () => runDeckMacro("Dongle status", () => runDongleCommand({ cmd: "status" }))
+    },
+    {
+      label: "Deck ready",
+      icon: Power,
+      disabled: dongleBusy || !donglePath,
+      action: () => runDeckMacro("Deck ready", () => runDongleCommand({ cmd: "payload", id: "remote.deck-ready" }))
+    },
+    {
+      label: "ESP32 ping",
+      icon: Zap,
+      disabled: !esp32Session || esp32Busy,
+      action: () => runDeckMacro("ESP32 ping", () => sendEsp32Quick("ESP32 ping", "print('nightgrid')\r\n"))
+    },
+    {
+      label: "Memory check",
+      icon: Cpu,
+      disabled: !selectedSession || selectedSession.role === "flipper",
+      action: () => runDeckMacro("Memory check", () => writeSelected("import gc; print(gc.mem_free())\r\n"))
+    }
+  ];
+
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">USB field console</p>
-          <h1>NightGrid Cyberdeck</h1>
+        <div className="brand-lockup">
+          <div className="brand-mark" aria-hidden="true">
+            NG
+          </div>
+          <div>
+            <p className="eyebrow">USB field console</p>
+            <h1>NightGrid Cyberdeck</h1>
+          </div>
         </div>
         <div className="topbar-actions">
           <span className="status-pill">
@@ -822,6 +970,34 @@ export function App() {
           </button>
         </div>
       </header>
+
+      <section className="deck-hud" aria-label="NightGrid deck status">
+        <div className="hud-tile live">
+          <span>Deck</span>
+          <strong>{deckState}</strong>
+          <small>{ports.length} ports scanned</small>
+        </div>
+        <div className="hud-tile">
+          <span>Sessions</span>
+          <strong>{sessions.length}</strong>
+          <small>{selectedPathLabel}</small>
+        </div>
+        <div className="hud-tile">
+          <span>Known boards</span>
+          <strong>{knownPortCount}</strong>
+          <small>{selectedRoleLabel}</small>
+        </div>
+        <div className="hud-tile">
+          <span>GPS</span>
+          <strong>{gpsStatus}</strong>
+          <small>{gpsCanPush ? "Fix ready" : "No push"}</small>
+        </div>
+        <div className="hud-tile">
+          <span>ESP32 auto</span>
+          <strong>{esp32AutoConnect ? "Armed" : "Off"}</strong>
+          <small>{esp32Session ? esp32Session.path : "Waiting"}</small>
+        </div>
+      </section>
 
       <section className="dashboard">
         <aside className="panel device-panel">
@@ -846,13 +1022,18 @@ export function App() {
                 const connected = connectedPaths.has(port.path);
                 const session = sessions.find((item) => item.path === port.path);
                 return (
-                  <article className={`device-card ${connected ? "connected" : ""}`} key={port.path}>
+                  <article className={`device-card role-${role} ${connected ? "connected" : ""}`} key={port.path}>
                     <div className="device-main">
                       <RoleIcon size={20} />
                       <div>
                         <h3>{port.path}</h3>
                         <p>{port.friendlyName || port.manufacturer}</p>
                       </div>
+                    </div>
+                    <div className="device-status-strip" aria-hidden="true">
+                      {[0, 1, 2, 3, 4].map((bar) => (
+                        <span key={bar} className={connected || bar < Math.min(port.tags.length + 1, 5) ? "lit" : ""} />
+                      ))}
                     </div>
 
                     <div className="tag-row">
@@ -922,6 +1103,21 @@ export function App() {
             <Terminal size={22} />
           </div>
 
+          <div className="console-hud">
+            <div>
+              <span>Selected</span>
+              <strong>{selectedPathLabel}</strong>
+            </div>
+            <div>
+              <span>Role</span>
+              <strong>{selectedRoleLabel}</strong>
+            </div>
+            <div>
+              <span>Last event</span>
+              <strong>{latestEvent ? latestEvent.channel.toUpperCase() : "None"}</strong>
+            </div>
+          </div>
+
           <div className="session-tabs">
             {sessions.length === 0 ? (
               <span className="muted">Connect a port to start a session.</span>
@@ -938,11 +1134,36 @@ export function App() {
             )}
           </div>
 
+          <div className="terminal-toolbar">
+            <div className="filter-row">
+              {(["all", "rx", "tx", "status"] as LogFilter[]).map((filter) => (
+                <button
+                  className={logFilter === filter ? "active" : ""}
+                  key={filter}
+                  onClick={() => setLogFilter(filter)}
+                >
+                  {filter.toUpperCase()}
+                  <span>{logStats[filter]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="tool-row">
+              <button className="icon-button compact" disabled={logs.length === 0} onClick={copyLogs}>
+                <Clipboard size={15} />
+                Copy
+              </button>
+              <button className="icon-button compact danger" disabled={logs.length === 0} onClick={clearLogs}>
+                <Trash2 size={15} />
+                Clear
+              </button>
+            </div>
+          </div>
+
           <div className="terminal-window" ref={logRef}>
-            {logs.length === 0 ? (
+            {visibleLogs.length === 0 ? (
               <p className="terminal-muted">Waiting for traffic.</p>
             ) : (
-              logs.map((entry) => (
+              visibleLogs.map((entry) => (
                 <div className={`log-line ${entry.channel}`} key={entry.id}>
                   <span>{formatTime(entry.at)}</span>
                   <span>{entry.channel.toUpperCase()}</span>
@@ -976,6 +1197,29 @@ export function App() {
         </section>
 
         <aside className="side-stack">
+          <section className="panel command-deck-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Macro launcher</p>
+                <h2>Command Deck</h2>
+              </div>
+              <Zap size={22} />
+            </div>
+            <div className="macro-grid">
+              {macroButtons.map((macro) => {
+                const MacroIcon = macro.icon;
+                const disabled = Boolean(macroBusy) || macro.disabled;
+                return (
+                  <button className="icon-button macro-button" disabled={disabled} key={macro.label} onClick={macro.action}>
+                    <MacroIcon size={15} />
+                    {macroBusy === macro.label ? "Running" : macro.label}
+                  </button>
+                );
+              })}
+            </div>
+            <pre className="mesh-output macro-output">{macroOutput}</pre>
+          </section>
+
           <section className="panel">
             <div className="panel-heading">
               <div>
