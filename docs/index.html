@@ -220,7 +220,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.15</span>
+            <span>NIGHTGRID 0.1.16</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -230,6 +230,8 @@
             <div><span>Command Deck</span><strong>Macros / log tools</strong></div>
             <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
             <div><span>ESP32 module</span><strong>Auto connect</strong></div>
+            <div><span>Flasher</span><strong>T-Deck / ESP32-S3</strong></div>
+            <div><span>T-Deck Link</span><strong>ESP32 serial bridge</strong></div>
             <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
             <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
@@ -261,8 +263,18 @@
         </article>
         <article class="card">
           <h2>ESP32 Module</h2>
-          <p>Auto-connects generic ESP32 serial modules and exposes reset, bootloader, Ctrl-C/Ctrl-D, help, and file-list actions.</p>
+          <p>Auto-connects generic ESP32 serial modules and exposes reset, bootloader, Ctrl-C/Ctrl-D, help, file-list, and T-Deck Link actions.</p>
           <code>CP210x / CH340 / Espressif USB serial</code>
+        </article>
+        <article class="card">
+          <h2>Flasher</h2>
+          <p>Targets T-Deck, ESP32-S3, ESP32, and T-Dongle serial boards with public web flasher links plus connect, reset, and bootloader controls.</p>
+          <code>Open flasher / Firmware / Bootloader / Reset</code>
+        </article>
+        <article class="card">
+          <h2>T-Deck Link</h2>
+          <p>Sends CyberDeck Link probe, pair, deck-ready, launcher, and text JSON events through the selected ESP32 serial module.</p>
+          <code>{"cmd":"attachProbe","deckId":"itsz-tdeck"}</code>
         </article>
         <article class="card">
           <h2>T-Dongle Bridge</h2>

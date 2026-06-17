@@ -25,6 +25,8 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Live serial console with RX/TX/status lanes, line reassembly, and ANSI cleanup for Meshtastic firmware logs.
 - GPS fix panel for GGA/RMC NMEA sentences, active baud probing, cached fix display, and manual/auto push to the T-Dongle bridge.
 - ESP32 module panel with automatic connect, reset, bootloader, Ctrl-C/Ctrl-D, `help()`, and file listing actions.
+- Flasher panel for T-Deck, ESP32-S3, ESP32, and T-Dongle serial boards with web flasher, latest firmware, connect, reset, and bootloader actions.
+- ESP32 T-Deck Link controls for `cyberdeck-link-v0` probe, pair, deck-ready, launcher, and text events over the selected ESP32 serial module.
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
@@ -135,8 +137,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.15
-git push origin v0.1.15
+git tag v0.1.16
+git push origin v0.1.16
 ```
 
 The release workflow uploads:

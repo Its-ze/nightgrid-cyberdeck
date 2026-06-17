@@ -42,10 +42,20 @@ interface LogEntry {
 }
 
 type LogFilter = "all" | "rx" | "tx" | "status";
+type FlasherTarget = "tdeck" | "esp32s3" | "esp32" | "tdongle";
 
 const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 const gpsFreshMs = 6000;
 const gpsCacheTtlMs = 120000;
+const zDeckFlasherUrl = "https://its-ze.github.io/Z-Deck-Web-Flasher/";
+const zDeckReleaseUrl = "https://github.com/Its-ze/Z-Deck-Web-Flasher/releases/latest";
+
+const flasherTargetLabels: Record<FlasherTarget, string> = {
+  tdeck: "T-Deck",
+  esp32s3: "ESP32-S3",
+  esp32: "ESP32",
+  tdongle: "T-Dongle"
+};
 
 const roleLabels: Record<DeviceRole, string> = {
   heltec: "Heltec mesh",
@@ -86,6 +96,15 @@ const isEsp32Candidate = (port: DevicePort, role?: DeviceRole) =>
   port.tags.some((tag) => /esp32|esp32-s3|cp210x|ch340|usb-serial\/jtag/i.test(tag)) ||
   ["10C4", "1A86", "303A"].includes(port.vendorId ?? "") ||
   /esp32|espressif|cp210|ch340|usb-serial\/jtag/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
+
+const isFlasherCandidate = (port: DevicePort, role?: DeviceRole) =>
+  role === "tdeck" ||
+  role === "tdongle" ||
+  role === "esp32" ||
+  role === "heltec" ||
+  ["tdeck", "tdongle", "esp32", "heltec"].includes(port.suggestedRole) ||
+  isEsp32Candidate(port, role) ||
+  port.tags.some((tag) => /esp32|esp32-s3|t-deck|t-dongle|heltec|cp210x|ch340|usb-serial\/jtag/i.test(tag));
 
 const isGpsCandidate = (port: DevicePort, role?: DeviceRole) =>
   role === "gps" ||
@@ -203,6 +222,12 @@ export function App() {
   const [esp32AutoConnect, setEsp32AutoConnect] = useState(true);
   const [esp32Busy, setEsp32Busy] = useState(false);
   const [esp32Output, setEsp32Output] = useState("ESP32 module output will appear here.");
+  const [flasherPath, setFlasherPath] = useState("");
+  const [flasherTarget, setFlasherTarget] = useState<FlasherTarget>("tdeck");
+  const [flasherBusy, setFlasherBusy] = useState(false);
+  const [flasherOutput, setFlasherOutput] = useState("Flasher controls will appear here.");
+  const [esp32LinkText, setEsp32LinkText] = useState("NightGrid ESP32 link check");
+  const [esp32LinkOutput, setEsp32LinkOutput] = useState("ESP32 T-Deck link output will appear here.");
   const [macroBusy, setMacroBusy] = useState("");
   const [macroOutput, setMacroOutput] = useState("Command deck ready.");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
@@ -219,6 +244,7 @@ export function App() {
   const gpsPathRef = useRef("");
   const donglePathRef = useRef("");
   const esp32PathRef = useRef("");
+  const flasherPathRef = useRef("");
   const esp32AutoConnected = useRef(new Set<string>());
   const esp32AutoScanBusy = useRef(false);
 
@@ -228,6 +254,8 @@ export function App() {
   const donglePorts = ports.filter((port) => isDongleCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const esp32Ports = ports.filter((port) => isEsp32Candidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const esp32Session = sessions.find((session) => session.path === esp32Path) ?? sessions.find((session) => session.role === "esp32");
+  const flasherPorts = ports.filter((port) => isFlasherCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
+  const flasherSession = sessions.find((session) => session.path === flasherPath);
   const gpsPorts = ports.filter((port) => isGpsCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const gpsFixAgeMs = gpsLastFixAt === null ? null : Math.max(0, gpsNow - gpsLastFixAt);
   const gpsCanPush = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
@@ -326,6 +354,18 @@ export function App() {
       }
     }
 
+    if (!flasherPathRef.current) {
+      const flasherPort =
+        nextPorts.find((port) => port.suggestedRole === "tdeck") ??
+        nextPorts.find((port) => port.suggestedRole === "esp32") ??
+        nextPorts.find((port) => port.suggestedRole === "tdongle") ??
+        nextPorts.find((port) => isFlasherCandidate(port, port.suggestedRole));
+      if (flasherPort) {
+        flasherPathRef.current = flasherPort.path;
+        setFlasherPath(flasherPort.path);
+      }
+    }
+
     if (options.log !== false) {
       addLog({
         channel: "status",
@@ -385,6 +425,14 @@ export function App() {
       });
       return undefined;
     }
+  };
+
+  const ensurePortSession = async (path: string, roleOverride?: DeviceRole) => {
+    const existing = sessionsRef.current.find((session) => session.path === path);
+    if (existing) return existing;
+    const port = ports.find((item) => item.path === path);
+    if (!port) return undefined;
+    return connectPort(port, roleOverride ?? roleByPathRef.current[path] ?? port.suggestedRole);
   };
 
   const disconnectSession = async (sessionId: string) => {
@@ -668,6 +716,88 @@ export function App() {
     await runEsp32Action(label, (session) => writeSession(session, data));
   };
 
+  const runFlasherAction = async (label: string, action: () => Promise<string | void>) => {
+    setFlasherBusy(true);
+    try {
+      const message = await action();
+      setFlasherOutput(message ?? `${label} complete.`);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: flasherPath || undefined,
+        text: `Flasher: ${label} complete.`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${label} failed.`;
+      setFlasherOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: flasherPath || undefined,
+        text: `Flasher: ${message}`
+      });
+    } finally {
+      setFlasherBusy(false);
+    }
+  };
+
+  const connectFlasherTarget = async () => {
+    if (!flasherPath) throw new Error("Select a flasher serial port first.");
+    const roleOverride: DeviceRole =
+      flasherTarget === "tdongle" ? "tdongle" : flasherTarget === "tdeck" ? "tdeck" : "esp32";
+    const session = await ensurePortSession(flasherPath, roleOverride);
+    if (!session) throw new Error("Could not open the selected flasher serial port.");
+    setFlasherPath(session.path);
+    flasherPathRef.current = session.path;
+    return session;
+  };
+
+  const connectFlasher = () =>
+    runFlasherAction("Connect flasher", async () => {
+      const session = await connectFlasherTarget();
+      return `${flasherTargetLabels[flasherTarget]} connected on ${session.path} at ${session.baudRate}.`;
+    });
+
+  const openWebFlasher = () =>
+    runFlasherAction("Open web flasher", async () => {
+      await api.openExternal(zDeckFlasherUrl);
+      return `Opened ${zDeckFlasherUrl}`;
+    });
+
+  const openFirmwareRelease = () =>
+    runFlasherAction("Open latest firmware", async () => {
+      await api.openExternal(zDeckReleaseUrl);
+      return `Opened ${zDeckReleaseUrl}`;
+    });
+
+  const resetFlasherTarget = () =>
+    runFlasherAction(`${flasherTargetLabels[flasherTarget]} reset`, async () => {
+      const session = await connectFlasherTarget();
+      await api.esp32Reset({ sessionId: session.id });
+      return `${flasherTargetLabels[flasherTarget]} reset signal sent to ${session.path}.`;
+    });
+
+  const bootloaderFlasherTarget = () =>
+    runFlasherAction(`${flasherTargetLabels[flasherTarget]} bootloader`, async () => {
+      const session = await connectFlasherTarget();
+      await api.esp32Bootloader({ sessionId: session.id });
+      return `${flasherTargetLabels[flasherTarget]} bootloader signal sent to ${session.path}.`;
+    });
+
+  const sendEsp32LinkCommand = async (label: string, command: DongleCommandPayload) => {
+    await runEsp32Action(`T-Deck link ${label}`, async (session) => {
+      const payload = `${JSON.stringify(command)}\n`;
+      await writeSession(session, payload);
+      setEsp32LinkOutput(`Sent ${label} to ${session.path}\n${payload.trim()}`);
+    });
+  };
+
+  const sendEsp32LinkText = async () => {
+    const text = esp32LinkText.trim();
+    if (!text) return;
+    await sendEsp32LinkCommand("text", { cmd: "text", text });
+  };
+
   const runDeckMacro = async (label: string, action: () => Promise<void>) => {
     setMacroBusy(label);
     try {
@@ -742,6 +872,10 @@ export function App() {
   useEffect(() => {
     esp32PathRef.current = esp32Path;
   }, [esp32Path]);
+
+  useEffect(() => {
+    flasherPathRef.current = flasherPath;
+  }, [flasherPath]);
 
   useEffect(() => {
     refreshDevices();
@@ -927,8 +1061,17 @@ export function App() {
     {
       label: "ESP32 ping",
       icon: Zap,
-      disabled: !esp32Session || esp32Busy,
+      disabled: !esp32Path || esp32Busy,
       action: () => runDeckMacro("ESP32 ping", () => sendEsp32Quick("ESP32 ping", "print('nightgrid')\r\n"))
+    },
+    {
+      label: "T-Deck link",
+      icon: Plug,
+      disabled: !esp32Path || esp32Busy,
+      action: () =>
+        runDeckMacro("T-Deck link", () =>
+          sendEsp32LinkCommand("probe", { cmd: "attachProbe", deckId: dongleDeckId, deckName: dongleDeckName })
+        )
     },
     {
       label: "Memory check",
@@ -1218,6 +1361,68 @@ export function App() {
               })}
             </div>
             <pre className="mesh-output macro-output">{macroOutput}</pre>
+          </section>
+
+          <section className="panel flasher-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">ESP32-S3 / T-Deck</p>
+                <h2>Flasher</h2>
+              </div>
+              <Download size={22} />
+            </div>
+            <div className="flasher-controls">
+              <label>
+                Target
+                <select value={flasherTarget} onChange={(event) => setFlasherTarget(event.target.value as FlasherTarget)}>
+                  {Object.entries(flasherTargetLabels).map(([target, label]) => (
+                    <option value={target} key={target}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Port
+                <select
+                  value={flasherPath}
+                  onChange={(event) => {
+                    setFlasherPath(event.target.value);
+                    flasherPathRef.current = event.target.value;
+                  }}
+                >
+                  <option value="">Select port</option>
+                  {(flasherPorts.length ? flasherPorts : ports).map((port) => (
+                    <option value={port.path} key={port.path}>
+                      {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="button-grid">
+              <button className="icon-button primary" disabled={flasherBusy} onClick={openWebFlasher}>
+                <Download size={15} />
+                Open flasher
+              </button>
+              <button className="icon-button" disabled={flasherBusy} onClick={openFirmwareRelease}>
+                <Activity size={15} />
+                Firmware
+              </button>
+              <button className="icon-button" disabled={flasherBusy || !flasherPath || Boolean(flasherSession)} onClick={connectFlasher}>
+                <Plug size={15} />
+                {flasherSession ? "Connected" : "Connect"}
+              </button>
+              <button className="icon-button" disabled={flasherBusy || !flasherPath} onClick={bootloaderFlasherTarget}>
+                <Download size={15} />
+                Bootloader
+              </button>
+              <button className="icon-button" disabled={flasherBusy || !flasherPath} onClick={resetFlasherTarget}>
+                <RefreshCw size={15} />
+                Reset
+              </button>
+            </div>
+            <pre className="mesh-output flasher-output">{flasherOutput}</pre>
           </section>
 
           <section className="panel">
@@ -1568,6 +1773,52 @@ export function App() {
                 List files
               </button>
             </div>
+            <div className="subsection-heading">
+              <span>T-Deck Link</span>
+              <Radio size={16} />
+            </div>
+            <div className="button-grid">
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Path}
+                onClick={() => sendEsp32LinkCommand("probe", { cmd: "attachProbe", deckId: dongleDeckId, deckName: dongleDeckName })}
+              >
+                <Crosshair size={15} />
+                Link probe
+              </button>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Path}
+                onClick={() => sendEsp32LinkCommand("pair", { cmd: "pairBegin", deckId: dongleDeckId, deckName: dongleDeckName })}
+              >
+                <ShieldCheck size={15} />
+                Pair begin
+              </button>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Path}
+                onClick={() => sendEsp32LinkCommand("deck ready", { cmd: "payload", id: "remote.deck-ready" })}
+              >
+                <Power size={15} />
+                Deck ready
+              </button>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Path}
+                onClick={() => sendEsp32LinkCommand("launcher", { cmd: "control", action: "launcher" })}
+              >
+                <Terminal size={15} />
+                Launcher
+              </button>
+            </div>
+            <div className="bridge-send">
+              <input value={esp32LinkText} onChange={(event) => setEsp32LinkText(event.target.value)} placeholder="T-Deck link text" />
+              <button className="icon-button primary" disabled={esp32Busy || !esp32Path || !esp32LinkText.trim()} onClick={sendEsp32LinkText}>
+                <Send size={15} />
+                Link
+              </button>
+            </div>
+            <pre className="mesh-output link-output">{esp32LinkOutput}</pre>
             <pre className="mesh-output esp32-output">{esp32Output}</pre>
           </section>
 

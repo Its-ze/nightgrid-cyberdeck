@@ -579,6 +579,12 @@ input:focus {
   margin-top: 10px;
 }
 
+.flasher-controls {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 8px;
+}
+
 .checkbox-row {
   min-height: 38px;
   display: inline-flex;
@@ -642,6 +648,11 @@ input:focus {
   max-height: 150px;
 }
 
+.flasher-output {
+  min-height: 94px;
+  max-height: 160px;
+}
+
 .mesh-send {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 52px 88px;
@@ -700,6 +711,31 @@ input:focus {
 .esp32-output {
   min-height: 96px;
   max-height: 180px;
+}
+
+.link-output {
+  min-height: 94px;
+  max-height: 150px;
+}
+
+.subsection-heading {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.subsection-heading svg {
+  color: var(--amber);
 }
 
 .empty-state {
@@ -807,6 +843,7 @@ input:focus {
   .mesh-send,
   .bridge-send,
   .gps-controls,
+  .flasher-controls,
   .bridge-grid {
     grid-template-columns: 1fr;
     flex-direction: column;
