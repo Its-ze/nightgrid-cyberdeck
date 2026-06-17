@@ -832,6 +832,7 @@ export function App() {
   const esp32PathRef = useRef("");
   const flasherPathRef = useRef("");
   const lastDongleAttachLogRef = useRef({ key: "", loggedAt: 0 });
+  const serialFragmentRef = useRef(new Map<string, { event: SerialEvent; timeoutId: number }>());
   const esp32AutoConnected = useRef(new Set<string>());
   const esp32AutoScanBusy = useRef(false);
 
@@ -1171,13 +1172,13 @@ export function App() {
     const targetPath = meshPathRef.current || meshPorts[0]?.path;
     if (!targetPath) {
       setWarDriveOutput("Select or plug in a Heltec V3 / Meshtastic serial port first.");
-      return;
+      return false;
     }
     if (sessionsRef.current.some((session) => session.path === targetPath)) {
       setWarDriveOutput(`Disconnect the live serial session on ${targetPath} before War Drive polling. Meshtastic CLI needs exclusive port access.`);
-      return;
+      return false;
     }
-    if (warDriveBusyRef.current) return;
+    if (warDriveBusyRef.current) return false;
 
     if (targetPath !== meshPathRef.current) {
       setMeshPath(targetPath);
@@ -1196,7 +1197,7 @@ export function App() {
           role: "heltec",
           text: "War Drive mesh node poll failed."
         });
-        return;
+        return false;
       }
 
       const nodes = parseMeshNodeOutput(`${result.stdout}\n${result.stderr}`);
@@ -1247,6 +1248,7 @@ export function App() {
           .filter(Boolean)
           .join("\n")
       );
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "War Drive poll failed.";
       setWarDriveOutput(message);
@@ -1257,6 +1259,7 @@ export function App() {
         role: "heltec",
         text: message
       });
+      return false;
     } finally {
       warDriveBusyRef.current = false;
     }
@@ -1379,7 +1382,7 @@ export function App() {
   };
 
   const pushGpsFix = async (fix: GpsFix | null = gpsFix) => {
-    if (!fix || !hasGpsCoordinates(fix) || !donglePath) return;
+    if (!fix || !hasGpsCoordinates(fix) || !donglePath) return false;
     const text = formatGpsPush(fix);
     setGpsPushBusy(true);
     try {
@@ -1389,14 +1392,16 @@ export function App() {
         command: { cmd: "sd", action: "note.append", path: "/zdeck/notes/gps.log", payload: text },
         timeoutMs: 1800
       });
+      const ok = textResult.ok && noteResult.ok;
       setDongleOutput([formatCommandResult(textResult), formatCommandResult(noteResult)].join("\n\n"));
       addLog({
         channel: "status",
         at: new Date().toISOString(),
         path: donglePath,
         role: "tdongle",
-        text: `GPS fix pushed to T-Dongle bridge: ${text}`
+        text: ok ? `GPS fix pushed to T-Dongle bridge: ${text}` : "GPS fix push to T-Dongle bridge failed."
       });
+      return ok;
     } catch (error) {
       const message = error instanceof Error ? error.message : "GPS push failed.";
       setDongleOutput(message);
@@ -1407,6 +1412,7 @@ export function App() {
         role: "tdongle",
         text: message
       });
+      return false;
     } finally {
       setGpsPushBusy(false);
     }
@@ -1474,7 +1480,67 @@ export function App() {
       });
     }
 
-    return isRecentDuplicate;
+    return true;
+  };
+
+  const logRxSerialEvent = (event: SerialEvent) => {
+    addLog({
+      channel: "rx",
+      at: event.at,
+      path: event.path,
+      role: event.role,
+      text: event.text
+    });
+  };
+
+  const serialFragmentKey = (event: SerialEvent) => event.path || event.sessionId || "serial";
+
+  const shouldBufferSerialJson = (event: SerialEvent) => {
+    const text = event.text.trim();
+    return Boolean(text && (text.startsWith("{") || text.includes("cyberdeck.dongle.attach")));
+  };
+
+  const queueSerialFragment = (event: SerialEvent) => {
+    const key = serialFragmentKey(event);
+    const existing = serialFragmentRef.current.get(key);
+    if (existing) window.clearTimeout(existing.timeoutId);
+
+    const timeoutId = window.setTimeout(() => {
+      const pending = serialFragmentRef.current.get(key);
+      if (!pending || pending.timeoutId !== timeoutId) return;
+      serialFragmentRef.current.delete(key);
+      logRxSerialEvent(pending.event);
+    }, 1500);
+
+    serialFragmentRef.current.set(key, { event, timeoutId });
+  };
+
+  const handleSerialData = (event: SerialEvent) => {
+    const key = serialFragmentKey(event);
+    const pending = serialFragmentRef.current.get(key);
+    if (pending) {
+      window.clearTimeout(pending.timeoutId);
+      serialFragmentRef.current.delete(key);
+      const combined: SerialEvent = {
+        ...event,
+        at: pending.event.at,
+        text: `${pending.event.text}${event.text}`
+      };
+      if (applyDongleAttachFrame(combined)) return;
+      if (shouldBufferSerialJson(combined) && !parseCommandJson(combined.text) && combined.text.length < 6000) {
+        queueSerialFragment(combined);
+        return;
+      }
+      logRxSerialEvent(combined);
+      return;
+    }
+
+    if (applyDongleAttachFrame(event)) return;
+    if (shouldBufferSerialJson(event) && !parseCommandJson(event.text)) {
+      queueSerialFragment(event);
+      return;
+    }
+    logRxSerialEvent(event);
   };
 
   const sendDongleCommandRaw = async (
@@ -1820,7 +1886,7 @@ export function App() {
   };
 
   const sendEsp32Quick = async (label: string, data: string) => {
-    await runEsp32Action(label, (session) => writeSession(session, data));
+    return runEsp32Action(label, (session) => writeSession(session, data));
   };
 
   const formatEsp32RemotePayload = (replCode: string, jsonCommand: DongleCommandPayload, mode = esp32RemoteMode) =>
@@ -2133,7 +2199,7 @@ export function App() {
     });
 
   const sendEsp32LinkCommand = async (label: string, command: DongleCommandPayload) => {
-    await runEsp32Action(`T-Deck link ${label}`, async (session) => {
+    return runEsp32Action(`T-Deck link ${label}`, async (session) => {
       const payload = `${JSON.stringify(command)}\n`;
       await writeSession(session, payload);
       setEsp32LinkOutput(`Sent ${label} to ${session.path}\n${payload.trim()}`);
@@ -2245,16 +2311,7 @@ export function App() {
     api.getPlatform().then(setPlatform).catch(() => undefined);
 
     const offData = api.onSerialData((event: SerialEvent) => {
-      const suppressDuplicateDongleAttach = applyDongleAttachFrame(event);
-      if (!suppressDuplicateDongleAttach) {
-        addLog({
-          channel: "rx",
-          at: event.at,
-          path: event.path,
-          role: event.role,
-          text: event.text
-        });
-      }
+      handleSerialData(event);
     });
 
     const offStatus = api.onSerialStatus((event: SerialStatusEvent) => {
@@ -2283,6 +2340,10 @@ export function App() {
     });
 
     return () => {
+      for (const pending of serialFragmentRef.current.values()) {
+        window.clearTimeout(pending.timeoutId);
+      }
+      serialFragmentRef.current.clear();
       offData();
       offStatus();
       offGps();
@@ -2414,7 +2475,7 @@ export function App() {
       disabled: meshBusy || !meshPath,
       action: () =>
         runDeckMacro("Mesh nodes", async () => {
-          await runMeshCommand(() => api.meshNodes({ path: meshPath }));
+          return runMeshCommand(() => api.meshNodes({ path: meshPath }));
         })
     },
     {
@@ -2423,7 +2484,7 @@ export function App() {
       disabled: !meshPath || warDriveBusyRef.current,
       action: () =>
         runDeckMacro("War mark", async () => {
-          await recordWarDriveNodes("manual");
+          return recordWarDriveNodes("manual");
         })
     },
     {
@@ -2438,7 +2499,7 @@ export function App() {
       disabled: dongleBusy || !donglePath,
       action: () =>
         runDeckMacro("Dongle status", async () => {
-          await runDongleCommand({ cmd: "status" });
+          return runDongleCommand({ cmd: "status" });
         })
     },
     {
@@ -2453,7 +2514,7 @@ export function App() {
       disabled: dongleBusy || !donglePath,
       action: () =>
         runDeckMacro("Deck ready", async () => {
-          await runDongleCommand({ cmd: "payload", id: "remote.deck-ready" });
+          return runDongleCommand({ cmd: "payload", id: "remote.deck-ready" });
         })
     },
     {
@@ -2477,7 +2538,7 @@ export function App() {
       disabled: !esp32Path || esp32Busy,
       action: () =>
         runDeckMacro("ESP32 remote", async () => {
-          await linkEsp32RemoteHost();
+          return linkEsp32RemoteHost();
         })
     },
     {

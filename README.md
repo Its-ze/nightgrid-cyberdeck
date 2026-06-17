@@ -33,7 +33,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
-- T-Dongle wireless bridge panel for parsing USB attach heartbeats, showing USB/pair status, probing the `CyberDeck-Link` GUI, opening Wi-Fi settings, writing the bridge URL, pairing with the T-Deck, GPS fix push, remote payloads, launcher/refresh, and text events.
+- T-Dongle wireless bridge panel for buffering fragmented USB attach heartbeats, showing USB/pair status, probing the `CyberDeck-Link` GUI, opening Wi-Fi settings, writing the bridge URL, pairing with the T-Deck, GPS fix push, remote payloads, launcher/refresh, and text events.
 - Packaged NightGrid app icon for Linux AppImage/deb, Linux launchers, Windows setup, the app window, and browser/installer preview.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - Uninstall scripts for Linux and Windows, with optional app-settings purge.
@@ -144,6 +144,8 @@ In the Radio tab, use the T-Dongle `Wireless Bridge` panel to get into the dongl
 
 If the USB readout says `Alive` but reachability says `Join AP`, the dongle is working over USB and the only missing piece is that the laptop is not connected to the dongle Wi-Fi AP. USB serial commands still work in that state.
 
+NightGrid buffers split `cyberdeck.dongle.attach` JSON frames before logging them, so the RX log should not fill with half-lines like `"commands"` followed by `:["pairing", ...]}`. Command Deck buttons also report failure when the matching panel action fails, including War Drive manual marks and Mesh/Dongle actions.
+
 ## Development
 
 ```bash
@@ -178,8 +180,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.24
-git push origin v0.1.24
+git tag v0.1.25
+git push origin v0.1.25
 ```
 
 The release workflow uploads:
