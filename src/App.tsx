@@ -105,6 +105,8 @@ const warDriveRepeatMs = 60000;
 const zDeckFlasherUrl = "https://its-ze.github.io/Z-Deck-Web-Flasher/";
 const zDeckReleaseUrl = "https://github.com/Its-ze/Z-Deck-Web-Flasher/releases/latest";
 const esp32RemoteProtocol = "nightgrid-esp32-remote-v0";
+const defaultDongleGuiUrl = "http://192.168.4.1";
+const defaultDongleSsid = "CyberDeck-Link";
 
 const flasherTargetLabels: Record<FlasherTarget, string> = {
   tdeck: "T-Deck",
@@ -699,6 +701,43 @@ const warDriveCsv = (records: WarDriveRecord[]) => {
   return `${header.join(",")}\n${rows.join("\n")}`;
 };
 
+const parseCommandJson = (text: string): Record<string, unknown> | null => {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const candidates = [
+    trimmed,
+    ...trimmed
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("{") && line.endsWith("}"))
+      .reverse()
+  ];
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) candidates.push(trimmed.slice(firstBrace, lastBrace + 1));
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    } catch {
+      // Try the next candidate; dongle output can include logs around JSON.
+    }
+  }
+  return null;
+};
+
+const readTextField = (record: Record<string, unknown> | null, key: string) => {
+  const value = record?.[key];
+  return typeof value === "string" ? value : "";
+};
+
+const normalizeUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return defaultDongleGuiUrl;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+};
+
 export function App() {
   const api = useMemo(() => window.nightgrid ?? createPreviewApi(), []);
   const [ports, setPorts] = useState<DevicePort[]>([]);
@@ -736,6 +775,8 @@ export function App() {
   const [dongleDeckId, setDongleDeckId] = useState("itsz-tdeck");
   const [dongleDeckName, setDongleDeckName] = useState("ITSZ T-Deck");
   const [donglePairCode, setDonglePairCode] = useState("");
+  const [dongleGuiUrl, setDongleGuiUrl] = useState(defaultDongleGuiUrl);
+  const [dongleGuiSsid, setDongleGuiSsid] = useState(defaultDongleSsid);
   const [dongleText, setDongleText] = useState("");
   const [donglePayloadId, setDonglePayloadId] = useState("remote.deck-ready");
   const [esp32Path, setEsp32Path] = useState("");
@@ -1359,15 +1400,39 @@ export function App() {
     }
   };
 
-  const runDongleCommand = async (command: DongleCommandPayload, timeoutMs = 3400, pathOverride = donglePathRef.current || donglePath) => {
+  const sendDongleCommandRaw = async (
+    command: DongleCommandPayload,
+    timeoutMs = 3400,
+    pathOverride = donglePathRef.current || donglePath
+  ) => {
     const commandPath = pathOverride || donglePathRef.current || donglePath;
-    if (!commandPath) {
-      setDongleOutput("Select a T-Dongle serial port first.");
-      return false;
-    }
+    if (!commandPath) throw new Error("Select a T-Dongle serial port first.");
+    return api.dongleCommand({ path: commandPath, command, timeoutMs });
+  };
+
+  const applyDongleDiscovery = (result: CommandResult) => {
+    const data = parseCommandJson(result.stdout);
+    const ip = readTextField(data, "ip");
+    const apSsid = readTextField(data, "apSsid");
+    const pairCode = readTextField(data, "pairCode");
+    const bridgeUrl = readTextField(data, "bridgeUrl");
+    if (ip) setDongleGuiUrl(normalizeUrl(ip));
+    if (bridgeUrl) setDongleGuiUrl(normalizeUrl(bridgeUrl));
+    if (apSsid) setDongleGuiSsid(apSsid);
+    if (pairCode) setDonglePairCode(pairCode);
+    return data;
+  };
+
+  const executeDongleCommand = async (
+    command: DongleCommandPayload,
+    timeoutMs = 3400,
+    pathOverride = donglePathRef.current || donglePath
+  ) => {
     setDongleBusy(true);
     try {
-      const result = await api.dongleCommand({ path: commandPath, command, timeoutMs });
+      const commandPath = pathOverride || donglePathRef.current || donglePath;
+      const result = await sendDongleCommandRaw(command, timeoutMs, commandPath);
+      applyDongleDiscovery(result);
       setDongleOutput(formatCommandResult(result));
       addLog({
         channel: "status",
@@ -1376,10 +1441,110 @@ export function App() {
         role: "tdongle",
         text: result.ok ? `T-Dongle command ${command.cmd} completed.` : `T-Dongle command ${command.cmd} failed.`
       });
-      return result.ok;
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "T-Dongle command failed.";
       setDongleOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: pathOverride || donglePathRef.current || donglePath || undefined,
+        role: "tdongle",
+        text: message
+      });
+      return undefined;
+    } finally {
+      setDongleBusy(false);
+    }
+  };
+
+  const runDongleCommand = async (
+    command: DongleCommandPayload,
+    timeoutMs = 3400,
+    pathOverride = donglePathRef.current || donglePath
+  ) => Boolean((await executeDongleCommand(command, timeoutMs, pathOverride))?.ok);
+
+  const sendDongleText = async () => {
+    if (!dongleText.trim()) return;
+    await runDongleCommand({ cmd: "text", text: dongleText.trim() });
+  };
+
+  const sendDonglePayload = async () => {
+    if (!donglePayloadId.trim()) return;
+    await runDongleCommand({ cmd: "payload", id: donglePayloadId.trim() });
+  };
+
+  const openDongleGui = async () => {
+    const url = normalizeUrl(dongleGuiUrl);
+    setDongleGuiUrl(url);
+    await api.openExternal(url);
+    setDongleOutput(`Opened T-Dongle GUI at ${url}\nJoin Wi-Fi AP ${dongleGuiSsid || defaultDongleSsid} if the page does not load.`);
+  };
+
+  const probeDongleGui = async () => {
+    await executeDongleCommand({ cmd: "attachProbe", deckId: dongleDeckId, deckName: dongleDeckName }, 2400);
+  };
+
+  const dongleProfilePayload = () =>
+    JSON.stringify({
+      name: dongleDeckName,
+      deckId: dongleDeckId,
+      bridgeUrl: normalizeUrl(dongleGuiUrl),
+      mode: "field"
+    });
+
+  const runDongleRemoteWizard = async (
+    label: string,
+    commands: Array<{ command: DongleCommandPayload; timeoutMs?: number }>
+  ) => {
+    const commandPath = donglePathRef.current || donglePath;
+    if (!commandPath) {
+      setDongleOutput("Select a T-Dongle serial port first.");
+      return false;
+    }
+
+    setDongleBusy(true);
+    const results: CommandResult[] = [];
+    let latestPairCode = donglePairCode;
+    let latestGuiUrl = normalizeUrl(dongleGuiUrl);
+    let latestSsid = dongleGuiSsid || defaultDongleSsid;
+    try {
+      for (const step of commands) {
+        const result = await sendDongleCommandRaw(step.command, step.timeoutMs ?? 3200, commandPath);
+        const data = applyDongleDiscovery(result);
+        const ip = readTextField(data, "ip");
+        const bridgeUrl = readTextField(data, "bridgeUrl");
+        const apSsid = readTextField(data, "apSsid");
+        const pairCode = readTextField(data, "pairCode");
+        if (ip) latestGuiUrl = normalizeUrl(ip);
+        if (bridgeUrl) latestGuiUrl = normalizeUrl(bridgeUrl);
+        if (apSsid) latestSsid = apSsid;
+        if (pairCode) latestPairCode = pairCode;
+        results.push(result);
+        addLog({
+          channel: "status",
+          at: new Date().toISOString(),
+          path: commandPath,
+          role: "tdongle",
+          text: `${label}: ${step.command.cmd} ${result.ok ? "completed" : "failed"}.`
+        });
+      }
+
+      const failed = results.filter((result) => !result.ok).length;
+      const pairCodeLine = latestPairCode ? `Pair code: ${latestPairCode}` : "Pair code will appear here if the dongle returns one.";
+      setDongleOutput(
+        [
+          `${label} ${failed ? `completed with ${failed} failed step${failed === 1 ? "" : "s"}` : "complete"}.`,
+          `GUI: ${latestGuiUrl}`,
+          `AP: ${latestSsid}`,
+          pairCodeLine,
+          ...results.map(formatCommandResult)
+        ].join("\n\n")
+      );
+      return failed === 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${label} failed.`;
+      setDongleOutput([message, ...results.map(formatCommandResult)].join("\n\n"));
       addLog({
         channel: "status",
         at: new Date().toISOString(),
@@ -1393,14 +1558,46 @@ export function App() {
     }
   };
 
-  const sendDongleText = async () => {
-    if (!dongleText.trim()) return;
-    await runDongleCommand({ cmd: "text", text: dongleText.trim() });
+  const startDongleRemoteLink = async () => {
+    const bridgeUrl = normalizeUrl(dongleGuiUrl);
+    setDongleGuiUrl(bridgeUrl);
+    await runDongleRemoteWizard("T-Dongle remote link start", [
+      { command: { cmd: "attachProbe", deckId: dongleDeckId, deckName: dongleDeckName }, timeoutMs: 2400 },
+      { command: { cmd: "writeConfig", key: "bridgeUrl", value: bridgeUrl }, timeoutMs: 2200 },
+      {
+        command: {
+          cmd: "saveProfile",
+          deckId: dongleDeckId,
+          deckName: dongleDeckName,
+          profile: dongleProfilePayload(),
+          profileHash: "tdeck-profile-v1"
+        },
+        timeoutMs: 2600
+      },
+      { command: { cmd: "payload", id: "remote.dongle-auto-pair" }, timeoutMs: 3200 },
+      { command: { cmd: "pairBegin", deckId: dongleDeckId, deckName: dongleDeckName }, timeoutMs: 3000 }
+    ]);
   };
 
-  const sendDonglePayload = async () => {
-    if (!donglePayloadId.trim()) return;
-    await runDongleCommand({ cmd: "payload", id: donglePayloadId.trim() });
+  const finishDongleRemoteLink = async () => {
+    if (!donglePairCode.trim()) {
+      setDongleOutput("Start the remote link first or enter the T-Deck pair code before finishing.");
+      return;
+    }
+    await runDongleRemoteWizard("T-Dongle remote link finish", [
+      {
+        command: {
+          cmd: "pairConfirm",
+          deckId: dongleDeckId,
+          deckName: dongleDeckName,
+          code: donglePairCode.trim()
+        },
+        timeoutMs: 3200
+      },
+      { command: { cmd: "payload", id: "remote.deck-ready" }, timeoutMs: 2600 },
+      { command: { cmd: "control", action: "launcher" }, timeoutMs: 1800 },
+      { command: { cmd: "control", action: "refresh" }, timeoutMs: 1800 }
+    ]);
   };
 
   const connectEsp32 = async (pathOverride?: string) => {
@@ -2075,6 +2272,12 @@ export function App() {
         runDeckMacro("Dongle status", async () => {
           await runDongleCommand({ cmd: "status" });
         })
+    },
+    {
+      label: "Dongle GUI",
+      icon: ExternalLink,
+      disabled: false,
+      action: () => runDeckMacro("Dongle GUI", openDongleGui)
     },
     {
       label: "Deck ready",
@@ -2789,6 +2992,60 @@ export function App() {
                 Deck name
                 <input value={dongleDeckName} onChange={(event) => setDongleDeckName(event.target.value)} />
               </label>
+            </div>
+            <div className="subsection-heading">
+              <span>GUI + Remote Link</span>
+              <ExternalLink size={16} />
+            </div>
+            <div className="gps-grid dongle-gui-grid">
+              <Metric label="AP" value={dongleGuiSsid || defaultDongleSsid} />
+              <Metric label="GUI" value={normalizeUrl(dongleGuiUrl)} />
+            </div>
+            <label className="solo-input">
+              T-Dongle GUI URL
+              <input value={dongleGuiUrl} onChange={(event) => setDongleGuiUrl(event.target.value)} />
+            </label>
+            <div className="button-grid">
+              <button className="icon-button" disabled={dongleBusy || !donglePath} onClick={probeDongleGui}>
+                <Crosshair size={15} />
+                Probe GUI
+              </button>
+              <button className="icon-button primary" onClick={openDongleGui}>
+                <ExternalLink size={15} />
+                Open GUI
+              </button>
+              <button className="icon-button" disabled={dongleBusy || !donglePath} onClick={startDongleRemoteLink}>
+                <Plug size={15} />
+                Start link
+              </button>
+              <button className="icon-button" disabled={dongleBusy || !donglePath || !donglePairCode.trim()} onClick={finishDongleRemoteLink}>
+                <ShieldCheck size={15} />
+                Finish link
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() =>
+                  runDongleCommand({
+                    cmd: "saveProfile",
+                    deckId: dongleDeckId,
+                    deckName: dongleDeckName,
+                    profile: dongleProfilePayload(),
+                    profileHash: "tdeck-profile-v1"
+                  })
+                }
+              >
+                <Clipboard size={15} />
+                Profile
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "writeConfig", key: "bridgeUrl", value: normalizeUrl(dongleGuiUrl) })}
+              >
+                <Download size={15} />
+                Write URL
+              </button>
             </div>
             <div className="button-grid">
               <button

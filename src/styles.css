@@ -908,6 +908,14 @@ input:focus {
   margin-top: 10px;
 }
 
+.dongle-gui-grid {
+  margin-top: 10px;
+}
+
+.dongle-gui-grid .metric {
+  min-height: 64px;
+}
+
 .bridge-send {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 96px;

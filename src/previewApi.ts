@@ -144,6 +144,48 @@ const previewDongleResponse = (path: string, command: DongleCommandPayload): Com
     );
   }
 
+  if (command.cmd === "saveProfile") {
+    return result(
+      label,
+      JSON.stringify(
+        {
+          ok: true,
+          deckId: command.deckId ?? "itsz-tdeck",
+          deckName: command.deckName ?? "ITSZ T-Deck",
+          profileHash: command.profileHash ?? "tdeck-profile-v1",
+          profilePath: "/zdeck/cyberdeck/dongle-profile.json",
+          preview: true
+        },
+        null,
+        2
+      )
+    );
+  }
+
+  if (command.cmd === "writeConfig") {
+    return result(
+      label,
+      JSON.stringify({ ok: true, key: command.key ?? "bridgeUrl", value: command.value ?? "http://192.168.4.1", preview: true }, null, 2)
+    );
+  }
+
+  if (command.cmd === "payload" && command.id === "remote.dongle-auto-pair") {
+    return result(
+      label,
+      JSON.stringify(
+        {
+          ok: true,
+          id: "remote.dongle-auto-pair",
+          event: "attach",
+          prompt: "T-Deck pair-for-remote-use popup queued.",
+          preview: true
+        },
+        null,
+        2
+      )
+    );
+  }
+
   if (command.cmd === "sd") {
     return result(
       label,
