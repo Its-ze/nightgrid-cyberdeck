@@ -45,6 +45,7 @@ const roleLabels: Record<DeviceRole, string> = {
   heltec: "Heltec mesh",
   tdeck: "T-Deck / ESP32-S3 mesh",
   tdongle: "T-Dongle console",
+  esp32: "ESP32 module",
   gps: "GPS NMEA",
   pico: "Pico console",
   flipper: "Flipper Zero",
@@ -55,6 +56,7 @@ const roleIcons: Record<DeviceRole, typeof Radio> = {
   heltec: Radio,
   tdeck: Radio,
   tdongle: Cpu,
+  esp32: Cpu,
   gps: Satellite,
   pico: Cpu,
   flipper: Cpu,
@@ -71,6 +73,13 @@ const isDongleCandidate = (port: DevicePort, role?: DeviceRole) =>
   (port.vendorId === "303A" && port.productId === "1001") ||
   port.tags.some((tag) => /t-dongle|t-deck\/t-dongle|lilygo esp32-s3/i.test(tag)) ||
   /t-dongle|tdongle|lilygo esp32-s3/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
+
+const isEsp32Candidate = (port: DevicePort, role?: DeviceRole) =>
+  role === "esp32" ||
+  port.suggestedRole === "esp32" ||
+  port.tags.some((tag) => /esp32|esp32-s3|cp210x|ch340|usb-serial\/jtag/i.test(tag)) ||
+  ["10C4", "1A86", "303A"].includes(port.vendorId ?? "") ||
+  /esp32|espressif|cp210|ch340|usb-serial\/jtag/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
 
 const isGpsCandidate = (port: DevicePort, role?: DeviceRole) =>
   role === "gps" ||
@@ -183,6 +192,10 @@ export function App() {
   const [donglePairCode, setDonglePairCode] = useState("");
   const [dongleText, setDongleText] = useState("");
   const [donglePayloadId, setDonglePayloadId] = useState("remote.deck-ready");
+  const [esp32Path, setEsp32Path] = useState("");
+  const [esp32AutoConnect, setEsp32AutoConnect] = useState(true);
+  const [esp32Busy, setEsp32Busy] = useState(false);
+  const [esp32Output, setEsp32Output] = useState("ESP32 module output will appear here.");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
@@ -190,11 +203,22 @@ export function App() {
   const logRef = useRef<HTMLDivElement>(null);
   const lastGpsPushAt = useRef(0);
   const lastGpsPushedFixAt = useRef<number | null>(null);
+  const sessionsRef = useRef<SerialSession[]>([]);
+  const roleByPathRef = useRef<Record<string, DeviceRole>>({});
+  const baudByPathRef = useRef<Record<string, number>>({});
+  const meshPathRef = useRef("");
+  const gpsPathRef = useRef("");
+  const donglePathRef = useRef("");
+  const esp32PathRef = useRef("");
+  const esp32AutoConnected = useRef(new Set<string>());
+  const esp32AutoScanBusy = useRef(false);
 
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
   const connectedPaths = new Set(sessions.map((session) => session.path));
   const meshPorts = ports.filter((port) => isMeshRole(port.suggestedRole) || isMeshRole(roleByPath[port.path]));
   const donglePorts = ports.filter((port) => isDongleCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
+  const esp32Ports = ports.filter((port) => isEsp32Candidate(port, roleByPath[port.path] ?? port.suggestedRole));
+  const esp32Session = sessions.find((session) => session.path === esp32Path) ?? sessions.find((session) => session.role === "esp32");
   const gpsPorts = ports.filter((port) => isGpsCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const gpsFixAgeMs = gpsLastFixAt === null ? null : Math.max(0, gpsNow - gpsLastFixAt);
   const gpsCanPush = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
@@ -213,49 +237,82 @@ export function App() {
     });
   };
 
-  const refreshDevices = async () => {
-    setIsRefreshing(true);
-    try {
-      const nextPorts = await api.listDevices();
-      setPorts(nextPorts);
-      setRoleByPath((current) => {
-        const next = { ...current };
-        for (const port of nextPorts) {
-          next[port.path] ??= port.suggestedRole;
-        }
-        return next;
-      });
-      setBaudByPath((current) => {
-        const next = { ...current };
-        for (const port of nextPorts) {
-          next[port.path] ??= defaultBaud(port.suggestedRole);
-        }
-        return next;
-      });
-      if (!meshPath) {
-        const meshPort = nextPorts.find((port) => isMeshRole(port.suggestedRole));
-        if (meshPort) setMeshPath(meshPort.path);
+  const applyScannedPorts = (nextPorts: DevicePort[], options: { log?: boolean } = {}) => {
+    setPorts(nextPorts);
+    const scannedPaths = new Set(nextPorts.map((port) => port.path));
+    for (const path of esp32AutoConnected.current) {
+      if (!scannedPaths.has(path)) esp32AutoConnected.current.delete(path);
+    }
+    setRoleByPath((current) => {
+      const next = { ...current };
+      for (const port of nextPorts) {
+        next[port.path] ??= port.suggestedRole;
       }
-      if (!gpsPath) {
-        const gpsPort =
-          nextPorts.find((port) => port.suggestedRole === "gps") ??
-          nextPorts.find((port) => isGpsCandidate(port, port.suggestedRole));
-        if (gpsPort) {
-          setGpsPath(gpsPort.path);
-          setGpsBaud(defaultBaud("gps"));
-        }
+      roleByPathRef.current = next;
+      return next;
+    });
+    setBaudByPath((current) => {
+      const next = { ...current };
+      for (const port of nextPorts) {
+        next[port.path] ??= defaultBaud(port.suggestedRole);
       }
-      if (!donglePath) {
-        const donglePort =
-          nextPorts.find((port) => port.suggestedRole === "tdongle") ??
-          nextPorts.find((port) => isDongleCandidate(port, port.suggestedRole));
-        if (donglePort) setDonglePath(donglePort.path);
+      baudByPathRef.current = next;
+      return next;
+    });
+
+    if (!meshPathRef.current) {
+      const meshPort = nextPorts.find((port) => isMeshRole(port.suggestedRole));
+      if (meshPort) {
+        meshPathRef.current = meshPort.path;
+        setMeshPath(meshPort.path);
       }
+    }
+
+    if (!gpsPathRef.current) {
+      const gpsPort =
+        nextPorts.find((port) => port.suggestedRole === "gps") ??
+        nextPorts.find((port) => isGpsCandidate(port, port.suggestedRole));
+      if (gpsPort) {
+        gpsPathRef.current = gpsPort.path;
+        setGpsPath(gpsPort.path);
+        setGpsBaud(defaultBaud("gps"));
+      }
+    }
+
+    if (!donglePathRef.current) {
+      const donglePort =
+        nextPorts.find((port) => port.suggestedRole === "tdongle") ??
+        nextPorts.find((port) => isDongleCandidate(port, port.suggestedRole));
+      if (donglePort) {
+        donglePathRef.current = donglePort.path;
+        setDonglePath(donglePort.path);
+      }
+    }
+
+    if (!esp32PathRef.current) {
+      const esp32Port =
+        nextPorts.find((port) => port.suggestedRole === "esp32") ??
+        nextPorts.find((port) => isEsp32Candidate(port, port.suggestedRole));
+      if (esp32Port) {
+        esp32PathRef.current = esp32Port.path;
+        setEsp32Path(esp32Port.path);
+      }
+    }
+
+    if (options.log !== false) {
       addLog({
         channel: "status",
         at: new Date().toISOString(),
         text: `Scanned ${nextPorts.length} serial port${nextPorts.length === 1 ? "" : "s"}.`
       });
+    }
+  };
+
+  const refreshDevices = async () => {
+    setIsRefreshing(true);
+    try {
+      const nextPorts = await api.listDevices();
+      applyScannedPorts(nextPorts);
     } catch (error) {
       addLog({
         channel: "status",
@@ -267,13 +324,30 @@ export function App() {
     }
   };
 
-  const connectPort = async (port: DevicePort) => {
-    const role = roleByPath[port.path] ?? port.suggestedRole;
+  const connectPort = async (port: DevicePort, roleOverride?: DeviceRole) => {
+    const role = roleOverride ?? roleByPath[port.path] ?? port.suggestedRole;
     const baudRate = baudByPath[port.path] ?? defaultBaud(role);
+    if (roleOverride) {
+      setRoleByPath((current) => {
+        const next = { ...current, [port.path]: roleOverride };
+        roleByPathRef.current = next;
+        return next;
+      });
+      setBaudByPath((current) => {
+        const next = { ...current, [port.path]: baudRate };
+        baudByPathRef.current = next;
+        return next;
+      });
+    }
     try {
       const session = await api.connectDevice({ path: port.path, baudRate, role });
-      setSessions((current) => (current.some((item) => item.id === session.id) ? current : [...current, session]));
+      setSessions((current) => {
+        const next = current.some((item) => item.id === session.id) ? current : [...current, session];
+        sessionsRef.current = next;
+        return next;
+      });
       setSelectedSessionId(session.id);
+      return session;
     } catch (error) {
       addLog({
         channel: "status",
@@ -282,28 +356,37 @@ export function App() {
         role,
         text: error instanceof Error ? error.message : "Connection failed."
       });
+      return undefined;
     }
   };
 
   const disconnectSession = async (sessionId: string) => {
     await api.disconnectDevice(sessionId);
-    setSessions((current) => current.filter((session) => session.id !== sessionId));
+    setSessions((current) => {
+      const next = current.filter((session) => session.id !== sessionId);
+      sessionsRef.current = next;
+      return next;
+    });
     if (selectedSessionId === sessionId) setSelectedSessionId("");
   };
 
-  const writeSelected = async (data?: string) => {
-    if (!selectedSession) return;
-    const suffix = lineEnding === "crlf" ? "\r\n" : lineEnding === "lf" ? "\n" : "";
-    const payload = data ?? `${serialInput}${suffix}`;
-    if (!payload) return;
-    await api.writeDevice({ sessionId: selectedSession.id, data: payload });
+  const writeSession = async (session: SerialSession | undefined, payload: string) => {
+    if (!session || !payload) return;
+    await api.writeDevice({ sessionId: session.id, data: payload });
     addLog({
       channel: "tx",
       at: new Date().toISOString(),
-      path: selectedSession.path,
-      role: selectedSession.role,
+      path: session.path,
+      role: session.role,
       text: payload
     });
+  };
+
+  const writeSelected = async (data?: string) => {
+    const suffix = lineEnding === "crlf" ? "\r\n" : lineEnding === "lf" ? "\n" : "";
+    const payload = data ?? `${serialInput}${suffix}`;
+    if (!payload) return;
+    await writeSession(selectedSession, payload);
     if (!data) setSerialInput("");
   };
 
@@ -369,7 +452,11 @@ export function App() {
     setBaudByPath((current) => ({ ...current, [port.path]: gpsBaud }));
     try {
       const session = await api.connectDevice({ path: port.path, baudRate: gpsBaud, role: "gps" });
-      setSessions((current) => (current.some((item) => item.id === session.id) ? current : [...current, session]));
+      setSessions((current) => {
+        const next = current.some((item) => item.id === session.id) ? current : [...current, session];
+        sessionsRef.current = next;
+        return next;
+      });
       setSelectedSessionId(session.id);
     } catch (error) {
       addLog({
@@ -454,6 +541,64 @@ export function App() {
     await runDongleCommand({ cmd: "payload", id: donglePayloadId.trim() });
   };
 
+  const connectEsp32 = async () => {
+    const port = ports.find((item) => item.path === esp32Path) ?? esp32Ports[0];
+    if (!port) return undefined;
+    setEsp32Busy(true);
+    try {
+      const session = await connectPort(port, "esp32");
+      if (session) {
+        setEsp32Path(port.path);
+        esp32PathRef.current = port.path;
+        setEsp32Output(`Connected ESP32 module on ${port.path} at ${session.baudRate}.`);
+      }
+      return session;
+    } finally {
+      setEsp32Busy(false);
+    }
+  };
+
+  const ensureEsp32Session = async () => {
+    const existing =
+      sessionsRef.current.find((session) => session.path === esp32PathRef.current) ??
+      sessionsRef.current.find((session) => session.role === "esp32");
+    if (existing) return existing;
+    return connectEsp32();
+  };
+
+  const runEsp32Action = async (label: string, action: (session: SerialSession) => Promise<void>) => {
+    setEsp32Busy(true);
+    try {
+      const session = await ensureEsp32Session();
+      if (!session) throw new Error("Select or connect an ESP32 serial module first.");
+      await action(session);
+      setEsp32Output(`${label} completed on ${session.path}.`);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: session.path,
+        role: session.role,
+        text: `${label} completed.`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${label} failed.`;
+      setEsp32Output(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: esp32Path || undefined,
+        role: "esp32",
+        text: message
+      });
+    } finally {
+      setEsp32Busy(false);
+    }
+  };
+
+  const sendEsp32Quick = async (label: string, data: string) => {
+    await runEsp32Action(label, (session) => writeSession(session, data));
+  };
+
   const installUpdate = async () => {
     setUpdateBusy(true);
     setUpdateMessage("");
@@ -479,6 +624,34 @@ export function App() {
   };
 
   useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  useEffect(() => {
+    roleByPathRef.current = roleByPath;
+  }, [roleByPath]);
+
+  useEffect(() => {
+    baudByPathRef.current = baudByPath;
+  }, [baudByPath]);
+
+  useEffect(() => {
+    meshPathRef.current = meshPath;
+  }, [meshPath]);
+
+  useEffect(() => {
+    gpsPathRef.current = gpsPath;
+  }, [gpsPath]);
+
+  useEffect(() => {
+    donglePathRef.current = donglePath;
+  }, [donglePath]);
+
+  useEffect(() => {
+    esp32PathRef.current = esp32Path;
+  }, [esp32Path]);
+
+  useEffect(() => {
     refreshDevices();
     api.getPlatform().then(setPlatform).catch(() => undefined);
 
@@ -500,7 +673,11 @@ export function App() {
         text: event.message
       });
       if (event.status === "disconnected" && event.sessionId) {
-        setSessions((current) => current.filter((session) => session.id !== event.sessionId));
+        setSessions((current) => {
+          const next = current.filter((session) => session.id !== event.sessionId);
+          sessionsRef.current = next;
+          return next;
+        });
       }
     });
 
@@ -519,6 +696,85 @@ export function App() {
       offGps();
     };
   }, [api]);
+
+  useEffect(() => {
+    if (!esp32AutoConnect) return;
+    let cancelled = false;
+
+    const scanAndConnect = async () => {
+      if (esp32AutoScanBusy.current) return;
+      let targetPath: string | undefined;
+      esp32AutoScanBusy.current = true;
+      try {
+        const nextPorts = await api.listDevices();
+        if (cancelled) return;
+        applyScannedPorts(nextPorts, { log: false });
+
+        const candidate = nextPorts.find((port) => {
+          const role = roleByPathRef.current[port.path] ?? port.suggestedRole;
+          return (
+            role === "esp32" &&
+            isEsp32Candidate(port, role) &&
+            !sessionsRef.current.some((session) => session.path === port.path) &&
+            !esp32AutoConnected.current.has(port.path)
+          );
+        });
+        if (!candidate) return;
+
+        targetPath = candidate.path;
+        const baudRate = baudByPathRef.current[candidate.path] ?? defaultBaud("esp32");
+        esp32AutoConnected.current.add(candidate.path);
+        setEsp32Path(candidate.path);
+        esp32PathRef.current = candidate.path;
+        setRoleByPath((current) => {
+          const next = { ...current, [candidate.path]: "esp32" as DeviceRole };
+          roleByPathRef.current = next;
+          return next;
+        });
+        setBaudByPath((current) => {
+          const next = { ...current, [candidate.path]: baudRate };
+          baudByPathRef.current = next;
+          return next;
+        });
+
+        const session = await api.connectDevice({ path: candidate.path, baudRate, role: "esp32" });
+        if (cancelled) return;
+        setSessions((current) => {
+          const next = current.some((item) => item.id === session.id) ? current : [...current, session];
+          sessionsRef.current = next;
+          return next;
+        });
+        setSelectedSessionId(session.id);
+        setEsp32Output(`Auto connected ESP32 module on ${candidate.path} at ${baudRate}.`);
+        addLog({
+          channel: "status",
+          at: new Date().toISOString(),
+          path: candidate.path,
+          role: "esp32",
+          text: `Auto connected ESP32 module at ${baudRate} baud.`
+        });
+      } catch (error) {
+        if (!targetPath) return;
+        const message = error instanceof Error ? error.message : "ESP32 auto connect failed.";
+        addLog({
+          channel: "status",
+          at: new Date().toISOString(),
+          path: targetPath,
+          role: "esp32",
+          text: message
+        });
+      } finally {
+        esp32AutoScanBusy.current = false;
+      }
+    };
+
+    void scanAndConnect();
+    const timer = window.setInterval(scanAndConnect, 3500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [api, esp32AutoConnect]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setGpsNow(Date.now()), 1000);
@@ -974,6 +1230,101 @@ export function App() {
               </button>
             </div>
             <pre className="mesh-output bridge-output">{dongleOutput}</pre>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">ESP32</p>
+                <h2>Module</h2>
+              </div>
+              <Cpu size={22} />
+            </div>
+            <label>
+              ESP32 port
+              <select
+                value={esp32Path}
+                onChange={(event) => {
+                  const nextPath = event.target.value;
+                  setEsp32Path(nextPath);
+                  esp32PathRef.current = nextPath;
+                  if (nextPath) {
+                    setRoleByPath((current) => {
+                      const next = { ...current, [nextPath]: "esp32" as DeviceRole };
+                      roleByPathRef.current = next;
+                      return next;
+                    });
+                    setBaudByPath((current) => {
+                      const next = { ...current, [nextPath]: current[nextPath] ?? defaultBaud("esp32") };
+                      baudByPathRef.current = next;
+                      return next;
+                    });
+                  }
+                }}
+              >
+                <option value="">Select port</option>
+                {(esp32Ports.length ? esp32Ports : ports).map((port) => (
+                  <option value={port.path} key={port.path}>
+                    {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="button-grid">
+              <button className="icon-button" disabled={esp32Busy || !esp32Path || Boolean(esp32Session)} onClick={() => connectEsp32()}>
+                <Plug size={15} />
+                {esp32Session ? "Connected" : "Connect"}
+              </button>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={esp32AutoConnect}
+                  onChange={(event) => setEsp32AutoConnect(event.target.checked)}
+                />
+                Auto connect
+              </label>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Session}
+                onClick={() => runEsp32Action("ESP32 reset", (session) => api.esp32Reset({ sessionId: session.id }))}
+              >
+                <RefreshCw size={15} />
+                Reset
+              </button>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Session}
+                onClick={() =>
+                  runEsp32Action("ESP32 bootloader", (session) => api.esp32Bootloader({ sessionId: session.id }))
+                }
+              >
+                <Download size={15} />
+                Bootloader
+              </button>
+            </div>
+            <div className="button-grid">
+              <button className="icon-button" disabled={esp32Busy || !esp32Session} onClick={() => sendEsp32Quick("Ctrl-C", "\x03")}>
+                Ctrl-C
+              </button>
+              <button className="icon-button" disabled={esp32Busy || !esp32Session} onClick={() => sendEsp32Quick("Ctrl-D", "\x04")}>
+                Ctrl-D
+              </button>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Session}
+                onClick={() => sendEsp32Quick("help()", "help()\r\n")}
+              >
+                help()
+              </button>
+              <button
+                className="icon-button"
+                disabled={esp32Busy || !esp32Session}
+                onClick={() => sendEsp32Quick("List files", "import os; print(os.listdir())\r\n")}
+              >
+                List files
+              </button>
+            </div>
+            <pre className="mesh-output esp32-output">{esp32Output}</pre>
           </section>
 
           <section className="panel">

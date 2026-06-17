@@ -119,7 +119,12 @@ const classifyPort = (port: ListedPort): DevicePort => {
   const isEsp32S3UsbJtag = vendorId === "303A" && productId === "1001";
   const isTDeck = hasAny(haystack, ["t-deck", "tdeck", "lilygo t-deck"]);
   const isTDongle = hasAny(haystack, ["t-dongle", "tdongle", "t dongle", "lilygo esp32-s3 dongle"]);
+  const isHeltec = haystack.includes("heltec");
   const isFlipper = haystack.includes("flipper") || (vendorId === "0483" && productId === "5740");
+  const isGenericEsp32 =
+    hasAny(haystack, ["esp32", "espressif", "usb-serial/jtag", "cp210", "ch340"]) ||
+    vendorId === "10C4" ||
+    vendorId === "1A86";
 
   if (isTDeck) {
     tags.push("T-Deck", "ESP32-S3", "Meshtastic");
@@ -128,14 +133,17 @@ const classifyPort = (port: ListedPort): DevicePort => {
     tags.push("T-Dongle", "ESP32-S3", "USB serial");
     suggestedRole = "tdongle";
   } else if (isEsp32S3UsbJtag) {
-    tags.push("LILYGO ESP32-S3", "T-Deck/T-Dongle", "USB serial");
+    tags.push("LILYGO ESP32-S3", "T-Deck/T-Dongle", "ESP32 module", "USB serial");
     suggestedRole = "tdeck";
   } else if (isFlipper) {
     tags.push("Flipper Zero", "CLI");
     suggestedRole = "flipper";
-  } else if (haystack.includes("heltec") || haystack.includes("cp210") || haystack.includes("esp32") || vendorId === "303A") {
+  } else if (isHeltec) {
     tags.push("ESP32", "Heltec/Mesh");
     suggestedRole = "heltec";
+  } else if (isGenericEsp32) {
+    tags.push("ESP32", "USB serial");
+    suggestedRole = "esp32";
   }
 
   if (haystack.includes("raspberry") || haystack.includes("pico") || vendorId === "2E8A") {
@@ -280,6 +288,32 @@ const writeSerialPort = (session: LiveSession, data: string) =>
       else session.port.drain((drainError) => (drainError ? reject(drainError) : resolve()));
     });
   });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const setSerialSignals = (session: LiveSession, signals: { dtr?: boolean; rts?: boolean; brk?: boolean }) =>
+  new Promise<void>((resolve, reject) => {
+    session.port.set(signals, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+
+const pulseEsp32Reset = async (session: LiveSession) => {
+  await setSerialSignals(session, { dtr: false, rts: true });
+  await sleep(120);
+  await setSerialSignals(session, { dtr: false, rts: false });
+};
+
+const enterEsp32Bootloader = async (session: LiveSession) => {
+  await setSerialSignals(session, { dtr: true, rts: false });
+  await sleep(100);
+  await setSerialSignals(session, { dtr: true, rts: true });
+  await sleep(120);
+  await setSerialSignals(session, { dtr: false, rts: true });
+  await sleep(80);
+  await setSerialSignals(session, { dtr: false, rts: false });
+};
 
 const openRawSerialPort = (port: SerialPort) =>
   new Promise<void>((resolve, reject) => {
@@ -710,6 +744,30 @@ const registerIpc = () => {
     const session = sessions.get(request.sessionId);
     if (!session) throw new Error("Serial session is not connected.");
     await writeSerialPort(session, request.data);
+  });
+
+  ipcMain.handle("devices:esp32-reset", async (_, request: { sessionId: string }) => {
+    const session = sessions.get(request.sessionId);
+    if (!session) throw new Error("ESP32 serial session is not connected.");
+    await pulseEsp32Reset(session);
+    emitStatus({
+      sessionId: session.id,
+      path: session.path,
+      status: "message",
+      message: `ESP32 reset signal sent to ${session.path}`
+    });
+  });
+
+  ipcMain.handle("devices:esp32-bootloader", async (_, request: { sessionId: string }) => {
+    const session = sessions.get(request.sessionId);
+    if (!session) throw new Error("ESP32 serial session is not connected.");
+    await enterEsp32Bootloader(session);
+    emitStatus({
+      sessionId: session.id,
+      path: session.path,
+      status: "message",
+      message: `ESP32 bootloader signal sent to ${session.path}`
+    });
   });
 
   ipcMain.handle("mesh:probe", async () => runMeshtastic([], 12000));

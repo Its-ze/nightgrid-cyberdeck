@@ -44,6 +44,16 @@ const previewPorts: DevicePort[] = [
     isKnownBoard: true
   },
   {
+    path: "/dev/ttyUSB2",
+    friendlyName: "ESP32 DevKit CP210x 10C4:EA60",
+    manufacturer: "Silicon Labs CP210x",
+    vendorId: "10C4",
+    productId: "EA60",
+    suggestedRole: "esp32",
+    tags: ["ESP32", "USB serial", "CP210x"],
+    isKnownBoard: true
+  },
+  {
     path: "/dev/ttyACM0",
     friendlyName: "Raspberry Pi Pico 2E8A:0005",
     manufacturer: "Raspberry Pi",
@@ -198,9 +208,11 @@ export const createPreviewApi = (): NightGridApi => {
             ? "Flipper Zero CLI preview\r\n>: "
             : role === "tdongle"
               ? "T-Dongle USB serial preview ready\r\n"
-            : role === "tdeck"
-              ? "T-Deck / ESP32-S3 USB serial preview ready\r\n"
-              : "NightGrid preview stream ready\r\n";
+              : role === "esp32"
+                ? "ESP32 serial console preview ready\r\nrst:0x1 (POWERON_RESET)\r\n>"
+                : role === "tdeck"
+                  ? "T-Deck / ESP32-S3 USB serial preview ready\r\n"
+                  : "NightGrid preview stream ready\r\n";
       emitData(session, greeting);
       if (role === "gps") {
         const fix: GpsFix = {
@@ -233,6 +245,14 @@ export const createPreviewApi = (): NightGridApi => {
     writeDevice: async ({ sessionId, data }: { sessionId: string; data: string }) => {
       const session = sessions.get(sessionId);
       if (session) emitData(session, `echo: ${data}`);
+    },
+    esp32Reset: async ({ sessionId }: { sessionId: string }) => {
+      const session = sessions.get(sessionId);
+      if (session) emitStatus({ sessionId, path: session.path, status: "message", message: "ESP32 reset signal sent" });
+    },
+    esp32Bootloader: async ({ sessionId }: { sessionId: string }) => {
+      const session = sessions.get(sessionId);
+      if (session) emitStatus({ sessionId, path: session.path, status: "message", message: "ESP32 bootloader signal sent" });
     },
     probeMeshCli: async () => result("meshtastic --version", "Meshtastic CLI preview available\n"),
     meshInfo: async ({ path }: { path: string }) =>

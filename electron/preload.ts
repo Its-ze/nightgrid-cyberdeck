@@ -25,6 +25,9 @@ const api: NightGridApi = {
   disconnectDevice: (sessionId: string) => ipcRenderer.invoke("devices:disconnect", sessionId) as Promise<void>,
   writeDevice: (request: { sessionId: string; data: string }) =>
     ipcRenderer.invoke("devices:write", request) as Promise<void>,
+  esp32Reset: (request: { sessionId: string }) => ipcRenderer.invoke("devices:esp32-reset", request) as Promise<void>,
+  esp32Bootloader: (request: { sessionId: string }) =>
+    ipcRenderer.invoke("devices:esp32-bootloader", request) as Promise<void>,
   probeMeshCli: () => ipcRenderer.invoke("mesh:probe") as Promise<CommandResult>,
   meshInfo: (request: { path: string }) => ipcRenderer.invoke("mesh:info", request) as Promise<CommandResult>,
   meshNodes: (request: { path: string }) => ipcRenderer.invoke("mesh:nodes", request) as Promise<CommandResult>,

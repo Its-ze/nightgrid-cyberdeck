@@ -1,4 +1,4 @@
-export type DeviceRole = "heltec" | "tdeck" | "tdongle" | "gps" | "pico" | "flipper" | "console";
+export type DeviceRole = "heltec" | "tdeck" | "tdongle" | "esp32" | "gps" | "pico" | "flipper" | "console";
 
 export interface DevicePort {
   path: string;
@@ -79,6 +79,8 @@ export interface NightGridApi {
   connectDevice: (request: { path: string; baudRate: number; role: DeviceRole }) => Promise<SerialSession>;
   disconnectDevice: (sessionId: string) => Promise<void>;
   writeDevice: (request: { sessionId: string; data: string }) => Promise<void>;
+  esp32Reset: (request: { sessionId: string }) => Promise<void>;
+  esp32Bootloader: (request: { sessionId: string }) => Promise<void>;
   probeMeshCli: () => Promise<CommandResult>;
   meshInfo: (request: { path: string }) => Promise<CommandResult>;
   meshNodes: (request: { path: string }) => Promise<CommandResult>;

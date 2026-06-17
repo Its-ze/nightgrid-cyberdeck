@@ -494,6 +494,11 @@ input:focus {
   max-height: 180px;
 }
 
+.esp32-output {
+  min-height: 96px;
+  max-height: 180px;
+}
+
 .empty-state {
   min-height: 180px;
   display: grid;

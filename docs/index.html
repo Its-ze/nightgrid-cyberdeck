@@ -6,7 +6,7 @@
     <title>NightGrid Cyberdeck Installer</title>
     <meta
       name="description"
-      content="Install NightGrid Cyberdeck, a dark USB field console for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial devices."
+      content="Install NightGrid Cyberdeck, a dark USB field console for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial devices."
     />
     <style>
       :root {
@@ -206,7 +206,7 @@
           <h1>NightGrid Cyberdeck</h1>
           <p class="lede">
             A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle bridge boards,
-            Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output, push a GPS fix through
+            ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output, push a GPS fix through
             the T-Dongle bridge, run Flipper and Pico quick commands, and bridge into Meshtastic from one local app.
           </p>
           <div class="actions">
@@ -220,7 +220,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.13</span>
+            <span>NIGHTGRID 0.1.14</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -228,6 +228,7 @@
             <div><span>App icon</span><strong>Linux / Windows</strong></div>
             <div><span>Serial logs</span><strong>Clean lines</strong></div>
             <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
+            <div><span>ESP32 module</span><strong>Auto connect</strong></div>
             <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
             <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
@@ -251,6 +252,11 @@
           <h2>USB Notes</h2>
           <p>On Linux, add your user to the serial group if ports cannot open. Meshtastic firmware logs are line-buffered and stripped of ANSI color codes.</p>
           <code>sudo usermod -aG dialout "$USER"</code>
+        </article>
+        <article class="card">
+          <h2>ESP32 Module</h2>
+          <p>Auto-connects generic ESP32 serial modules and exposes reset, bootloader, Ctrl-C/Ctrl-D, help, and file-list actions.</p>
+          <code>CP210x / CH340 / Espressif USB serial</code>
         </article>
         <article class="card">
           <h2>T-Dongle Bridge</h2>
