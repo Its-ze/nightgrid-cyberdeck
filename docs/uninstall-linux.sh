@@ -5,6 +5,7 @@ install_dir="${NIGHTGRID_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/Applications}}"
 target="${install_dir}/NightGrid-Cyberdeck.AppImage"
 fallback_target="${XDG_DATA_HOME:-${HOME}/.local/share}/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage"
 desktop_file="${XDG_DATA_HOME:-${HOME}/.local/share}/applications/nightgrid-cyberdeck.desktop"
+icon_file="${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor/512x512/apps/nightgrid-cyberdeck.png"
 removed=0
 
 for appimage in "${target}" "${fallback_target}"; do
@@ -18,6 +19,12 @@ done
 if [[ -f "${desktop_file}" ]]; then
   rm -f -- "${desktop_file}"
   echo "Removed ${desktop_file}"
+  removed=1
+fi
+
+if [[ -f "${icon_file}" ]]; then
+  rm -f -- "${icon_file}"
+  echo "Removed ${icon_file}"
   removed=1
 fi
 
@@ -47,6 +54,7 @@ if [[ "${NIGHTGRID_PURGE_DATA:-0}" == "1" ]]; then
 fi
 
 update-desktop-database "$(dirname "${desktop_file}")" >/dev/null 2>&1 || true
+gtk-update-icon-cache "${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor" >/dev/null 2>&1 || true
 
 if [[ "${removed}" == "0" ]]; then
   echo "NightGrid Cyberdeck was not found in the standard install locations."

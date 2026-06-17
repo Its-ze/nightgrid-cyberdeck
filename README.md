@@ -20,7 +20,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Serial port scanner with Heltec, T-Deck, T-Dongle, ESP32, Flipper Zero, Pico, GPS, CP210x, and CH340 hints.
 - Role-based connect presets for Heltec/T-Deck mesh, T-Dongle serial, ESP32 modules, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Command Deck macro launcher for selected-device help/status, mesh nodes, GPS push, T-Dongle status, deck-ready payload, ESP32 ping, and memory checks.
-- Curated Marketplace packs for T-Deck, T-Dongle, ESP32, ESP32-S3, WLED, ESPHome, MicroPython, ESP-IDF, Tasmota, and Meshtastic workflows.
+- Tabbed Marketplace packs for T-Deck, T-Dongle, ESP32, ESP32-S3, WLED, ESPHome, MicroPython, CircuitPython, ESP-IDF, Arduino-ESP32, Tasmota, ESP-NOW, RainMaker, LVGL, Matter, and Meshtastic workflows.
 - Top HUD with deck state, session count, selected role, GPS readiness, and ESP32 auto-connect state.
 - Serial console log filters for RX/TX/status plus copy and clear controls.
 - Live serial console with RX/TX/status lanes, line reassembly, and ANSI cleanup for Meshtastic firmware logs.
@@ -33,7 +33,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
 - T-Dongle wireless bridge panel for `cyberdeck-link-v0` probe, pairing, GPS fix push, remote payloads, launcher/refresh, and text events.
-- Packaged NightGrid app icon for Linux AppImage/deb, Windows setup, the app window, and browser preview.
+- Packaged NightGrid app icon for Linux AppImage/deb, Linux launchers, Windows setup, the app window, and browser/installer preview.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - Uninstall scripts for Linux and Windows, with optional app-settings purge.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
@@ -56,11 +56,11 @@ Windows quick install or update from PowerShell:
 irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex
 ```
 
-The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place when that directory is writable. If the current AppImage location is read-only, the installer falls back to `~/.local/share/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage` and updates the desktop launcher. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
+The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place when that directory is writable. If the current AppImage location is read-only, the installer falls back to `~/.local/share/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage`, installs the NightGrid icon into the user icon theme, and updates the desktop launcher with that icon path. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
 
 ## Marketplace Packs
 
-The in-app Marketplace opens curated official source or installer pages and applies NightGrid presets for the matching device role, baud rate, flasher target, and ESP32 Remote mode.
+The in-app Marketplace uses tabs for Featured, All, T-Deck, T-Dongle, ESP32, Smart, Firmware, and Lab packs. Each pack opens curated official source or installer pages and applies NightGrid presets for the matching device role, baud rate, flasher target, and ESP32 Remote mode.
 
 - T-Dongle Field Console from the official LilyGO T-Dongle-S3 project.
 - T-Deck Mesh UI from Meshtastic T-Deck documentation and the Meshtastic web flasher.
@@ -70,8 +70,9 @@ The in-app Marketplace opens curated official source or installer pages and appl
 - ESPHome Sensor Node with web installer and JSON Link marker.
 - ESP-IDF Example Bench for official Espressif example projects.
 - Tasmota IoT Console with the official Tasmota web installer.
+- Arduino ESP32 Starter, ESP Web Tools, CircuitPython S3 Console, MicroPython WebREPL, ESPHome Bluetooth Proxy, OpenMQTTGateway BLE, ESP-NOW Link Bench, ESP RainMaker, LVGL Display Bench, and ESP Matter Starter packs.
 
-Marketplace actions do not silently execute third-party repository code. `Source` opens the official project or installer. `Auto setup` configures NightGrid controls. `Run` sends the visible preset command through the same serial controls as the manual panels.
+Marketplace actions do not silently execute third-party repository code. `Source` opens the official project, `Grab` opens the installer/docs path, `Auto setup` configures NightGrid controls, and `Run` sends the visible preset command through the same serial controls as the manual panels.
 
 Linux uninstall:
 
@@ -154,8 +155,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.19
-git push origin v0.1.19
+git tag v0.1.20
+git push origin v0.1.20
 ```
 
 The release workflow uploads:

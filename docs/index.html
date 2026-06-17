@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NightGrid Cyberdeck Installer</title>
+    <link rel="icon" type="image/png" href="icon.png" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
     <meta
       name="description"
       content="Install NightGrid Cyberdeck, a dark USB field console for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial devices."
@@ -220,15 +222,15 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.19</span>
+            <span>NIGHTGRID 0.1.20</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
             <div><span>Updater</span><strong>Install / uninstall</strong></div>
-            <div><span>App icon</span><strong>Linux / Windows</strong></div>
+            <div><span>App icon</span><strong>Launcher fixed</strong></div>
             <div><span>Serial logs</span><strong>Clean lines</strong></div>
             <div><span>Command Deck</span><strong>Macros / log tools</strong></div>
-            <div><span>Marketplace</span><strong>Curated packs</strong></div>
+            <div><span>Marketplace</span><strong>Tabbed packs</strong></div>
             <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
             <div><span>ESP32 module</span><strong>Auto connect</strong></div>
             <div><span>ESP32 Remote</span><strong>REPL / JSON Link</strong></div>
@@ -245,7 +247,7 @@
       <section class="grid">
         <article class="card">
           <h2>Linux Install / Update</h2>
-          <p>Downloads the latest AppImage, uses a writable per-user fallback if needed, and creates a managed Meshtastic CLI venv for Mesh commands.</p>
+          <p>Downloads the latest AppImage, uses a writable per-user fallback if needed, installs the launcher icon, and creates a managed Meshtastic CLI venv for Mesh commands.</p>
           <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
         </article>
         <article class="card">
@@ -265,8 +267,8 @@
         </article>
         <article class="card">
           <h2>Marketplace</h2>
-          <p>Curated packs open official project or installer pages, then apply NightGrid presets for device role, baud rate, flasher target, and ESP32 Remote mode.</p>
-          <code>T-Deck / T-Dongle / WLED / ESPHome / MicroPython</code>
+          <p>Tabbed pack browser with Featured, All, T-Deck, T-Dongle, ESP32, Smart, Firmware, and Lab lanes plus Source, Grab, Auto setup, and Run actions.</p>
+          <code>WLED / ESPHome / CircuitPython / ESP-NOW / Matter</code>
         </article>
         <article class="card">
           <h2>ESP32 Module</h2>

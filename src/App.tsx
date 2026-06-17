@@ -47,7 +47,9 @@ interface LogEntry {
 type LogFilter = "all" | "rx" | "tx" | "status";
 type FlasherTarget = "tdeck" | "esp32s3" | "esp32" | "tdongle";
 type Esp32RemoteMode = "repl" | "json";
-type MarketplaceFilter = "all" | "tdeck" | "tdongle" | "esp32" | "smart" | "lab";
+type MarketplaceFilter = "featured" | "all" | "tdeck" | "tdongle" | "esp32" | "smart" | "firmware" | "lab";
+type MarketplaceCategory = Exclude<MarketplaceFilter, "featured" | "all">;
+type SideTab = "marketplace" | "command" | "radio" | "modules" | "flash";
 type MarketplaceSetup =
   | {
       kind: "esp32-remote";
@@ -71,7 +73,9 @@ type MarketplaceSetup =
 interface MarketplacePack {
   id: string;
   title: string;
-  category: MarketplaceFilter;
+  category: MarketplaceCategory;
+  featured?: boolean;
+  extraTabs?: MarketplaceFilter[];
   device: "T-Deck" | "T-Dongle" | "ESP32" | "ESP32-S3";
   badge: string;
   summary: string;
@@ -107,11 +111,13 @@ const esp32RemoteModeLabels: Record<Esp32RemoteMode, string> = {
 };
 
 const marketplaceFilters: Array<{ value: MarketplaceFilter; label: string }> = [
+  { value: "featured", label: "Featured" },
   { value: "all", label: "All" },
   { value: "tdeck", label: "T-Deck" },
   { value: "tdongle", label: "T-Dongle" },
   { value: "esp32", label: "ESP32" },
   { value: "smart", label: "Smart" },
+  { value: "firmware", label: "Firmware" },
   { value: "lab", label: "Lab" }
 ];
 
@@ -127,6 +133,8 @@ const marketplacePacks: MarketplacePack[] = [
     sourceUrl: "https://github.com/Xinyuan-LilyGO/T-Dongle-S3",
     targetRole: "tdongle",
     flasherTarget: "tdongle",
+    featured: true,
+    extraTabs: ["firmware"],
     setup: { kind: "dongle", command: { cmd: "status" } }
   },
   {
@@ -141,6 +149,8 @@ const marketplacePacks: MarketplacePack[] = [
     installUrl: "https://flasher.meshtastic.org/",
     targetRole: "tdeck",
     flasherTarget: "tdeck",
+    featured: true,
+    extraTabs: ["firmware"],
     setup: { kind: "mesh-info" }
   },
   {
@@ -154,6 +164,7 @@ const marketplacePacks: MarketplacePack[] = [
     sourceUrl: "https://github.com/Xinyuan-LilyGO/T-Deck",
     targetRole: "tdeck",
     flasherTarget: "tdeck",
+    extraTabs: ["lab"],
     setup: { kind: "mesh-info" }
   },
   {
@@ -168,6 +179,8 @@ const marketplacePacks: MarketplacePack[] = [
     targetRole: "esp32",
     remoteMode: "repl",
     remoteCommand: "import sys, gc\nprint(sys.platform, gc.mem_free())",
+    featured: true,
+    extraTabs: ["firmware", "lab"],
     setup: {
       kind: "esp32-remote",
       label: "MicroPython identify",
@@ -192,6 +205,8 @@ const marketplacePacks: MarketplacePack[] = [
     remotePin: "16",
     remoteValue: "1",
     remoteCommand: "from machine import Pin\nPin(16, Pin.OUT).value(1)",
+    featured: true,
+    extraTabs: ["firmware"],
     setup: {
       kind: "esp32-remote",
       label: "WLED GPIO16 smoke test",
@@ -213,6 +228,8 @@ const marketplacePacks: MarketplacePack[] = [
     targetRole: "esp32",
     remoteMode: "json",
     remoteCommand: "esphome-node-template",
+    featured: true,
+    extraTabs: ["esp32", "firmware"],
     setup: {
       kind: "esp32-remote",
       label: "ESPHome host marker",
@@ -233,6 +250,7 @@ const marketplacePacks: MarketplacePack[] = [
     targetRole: "esp32",
     flasherTarget: "esp32s3",
     remoteMode: "json",
+    extraTabs: ["firmware"],
     setup: {
       kind: "esp32-remote",
       label: "ESP-IDF bench marker",
@@ -254,8 +272,221 @@ const marketplacePacks: MarketplacePack[] = [
     targetRole: "esp32",
     flasherTarget: "esp32",
     remoteMode: "json",
+    extraTabs: ["firmware"],
     setup: { kind: "open", url: "https://tasmota.github.io/install/" }
+  },
+  {
+    id: "arduino-esp32-starter",
+    title: "Arduino ESP32 Starter",
+    category: "esp32",
+    device: "ESP32",
+    badge: "Arduino core",
+    summary: "Espressif Arduino core examples for quick sketches, serial tests, Wi-Fi, BLE, Matter, and peripheral bring-up.",
+    sourceName: "Espressif Arduino-ESP32",
+    sourceUrl: "https://github.com/espressif/arduino-esp32",
+    installUrl: "https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html",
+    targetRole: "esp32",
+    remoteMode: "json",
+    featured: true,
+    extraTabs: ["firmware", "lab"],
+    setup: {
+      kind: "esp32-remote",
+      label: "Arduino ESP32 marker",
+      mode: "json",
+      replCode: "print('nightgrid:arduino-esp32')",
+      jsonCommand: { cmd: "remoteControl", action: "arduino-esp32.examples", target: "esp32" }
+    }
+  },
+  {
+    id: "esp-web-tools-launcher",
+    title: "ESP Web Tools Launcher",
+    category: "firmware",
+    device: "ESP32",
+    badge: "Browser flash",
+    summary: "Browser-based ESP installer surface for supported ESP8266 and ESP32 firmware projects.",
+    sourceName: "ESP Web Tools",
+    sourceUrl: "https://github.com/esphome/esp-web-tools",
+    installUrl: "https://esphome.github.io/esp-web-tools/",
+    targetRole: "esp32",
+    flasherTarget: "esp32",
+    featured: true,
+    extraTabs: ["esp32"],
+    setup: { kind: "open", url: "https://esphome.github.io/esp-web-tools/" }
+  },
+  {
+    id: "circuitpython-s3-console",
+    title: "CircuitPython S3 Console",
+    category: "firmware",
+    device: "ESP32-S3",
+    badge: "UF2 / REPL",
+    summary: "CircuitPython board downloads and USB serial workflow for ESP32-S3 boards that support it.",
+    sourceName: "CircuitPython downloads",
+    sourceUrl: "https://circuitpython.org/downloads",
+    installUrl: "https://circuitpython.org/downloads",
+    targetRole: "esp32",
+    flasherTarget: "esp32s3",
+    remoteMode: "repl",
+    extraTabs: ["esp32", "lab"],
+    setup: {
+      kind: "esp32-remote",
+      label: "CircuitPython identify",
+      mode: "repl",
+      replCode: "import sys\nprint('nightgrid:circuitpython sys=%s' % sys.platform)",
+      jsonCommand: { cmd: "remoteControl", action: "circuitpython.identify" }
+    }
+  },
+  {
+    id: "micropython-webrepl",
+    title: "MicroPython WebREPL",
+    category: "esp32",
+    device: "ESP32",
+    badge: "Wi-Fi REPL",
+    summary: "Official MicroPython WebREPL docs and client for controlled wireless REPL experiments after you configure credentials.",
+    sourceName: "MicroPython WebREPL",
+    sourceUrl: "https://github.com/micropython/webrepl",
+    installUrl: "https://docs.micropython.org/en/latest/esp32/quickref.html",
+    targetRole: "esp32",
+    remoteMode: "repl",
+    extraTabs: ["lab"],
+    setup: {
+      kind: "esp32-remote",
+      label: "WebREPL readiness marker",
+      mode: "repl",
+      replCode: "print('nightgrid:webrepl configure with import webrepl_setup before enabling network REPL')",
+      jsonCommand: { cmd: "remoteControl", action: "micropython.webrepl.info" }
+    }
+  },
+  {
+    id: "esphome-bluetooth-proxy",
+    title: "ESPHome Bluetooth Proxy",
+    category: "smart",
+    device: "ESP32",
+    badge: "BLE relay",
+    summary: "Home Assistant Bluetooth proxy workflow for ESP32 boards, with ESPHome Web as the installer path.",
+    sourceName: "ESPHome Bluetooth Proxy",
+    sourceUrl: "https://esphome.io/components/bluetooth_proxy/",
+    installUrl: "https://web.esphome.io/",
+    targetRole: "esp32",
+    remoteMode: "json",
+    featured: true,
+    extraTabs: ["esp32", "firmware"],
+    setup: {
+      kind: "esp32-remote",
+      label: "Bluetooth proxy marker",
+      mode: "json",
+      replCode: "print('nightgrid:bluetooth-proxy-template')",
+      jsonCommand: { cmd: "remoteControl", action: "esphome.bluetooth_proxy", board: "esp32" }
+    }
+  },
+  {
+    id: "openmqttgateway-ble",
+    title: "OpenMQTTGateway BLE",
+    category: "smart",
+    device: "ESP32",
+    badge: "BLE to MQTT",
+    summary: "BLE-to-MQTT sensor gateway pack for local-first smart-home scanning and Theengs Decoder workflows.",
+    sourceName: "OpenMQTTGateway",
+    sourceUrl: "https://github.com/1technophile/OpenMQTTGateway",
+    installUrl: "https://docs.openmqttgateway.com/",
+    targetRole: "esp32",
+    remoteMode: "json",
+    extraTabs: ["esp32", "firmware"],
+    setup: { kind: "open", url: "https://docs.openmqttgateway.com/" }
+  },
+  {
+    id: "esp-now-link-bench",
+    title: "ESP-NOW Link Bench",
+    category: "lab",
+    device: "ESP32",
+    badge: "Peer link",
+    summary: "Espressif ESP-NOW references for low-latency device-to-device packets without a normal Wi-Fi network.",
+    sourceName: "Espressif ESP-NOW",
+    sourceUrl: "https://github.com/espressif/esp-now",
+    installUrl: "https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/network/esp_now.html",
+    targetRole: "esp32",
+    remoteMode: "json",
+    extraTabs: ["esp32"],
+    setup: {
+      kind: "esp32-remote",
+      label: "ESP-NOW bench marker",
+      mode: "json",
+      replCode: "print('nightgrid:esp-now-bench')",
+      jsonCommand: { cmd: "remoteControl", action: "esp-now.bench", target: "esp32" }
+    }
+  },
+  {
+    id: "esp-rainmaker-control",
+    title: "ESP RainMaker Control",
+    category: "smart",
+    device: "ESP32-S3",
+    badge: "Remote control",
+    summary: "Espressif RainMaker pack for official remote-control and monitoring examples on ESP32-class boards.",
+    sourceName: "ESP RainMaker",
+    sourceUrl: "https://github.com/espressif/esp-rainmaker",
+    installUrl: "https://rainmaker.espressif.com/docs/get-started.html",
+    targetRole: "esp32",
+    flasherTarget: "esp32s3",
+    remoteMode: "json",
+    extraTabs: ["firmware"],
+    setup: {
+      kind: "esp32-remote",
+      label: "RainMaker marker",
+      mode: "json",
+      replCode: "print('nightgrid:rainmaker')",
+      jsonCommand: { cmd: "remoteControl", action: "esp-rainmaker.examples", target: "esp32s3" }
+    }
+  },
+  {
+    id: "lvgl-display-bench",
+    title: "LVGL Display Bench",
+    category: "lab",
+    device: "ESP32",
+    badge: "Touch UI",
+    summary: "LVGL display/touch demo lane for ESP32 screens and future T-Deck-style UI experiments.",
+    sourceName: "LVGL ESP32 port",
+    sourceUrl: "https://github.com/lvgl/lv_port_esp32",
+    installUrl: "https://github.com/lvgl/lv_demos",
+    targetRole: "esp32",
+    remoteMode: "json",
+    extraTabs: ["tdeck"],
+    setup: {
+      kind: "esp32-remote",
+      label: "LVGL bench marker",
+      mode: "json",
+      replCode: "print('nightgrid:lvgl-display-bench')",
+      jsonCommand: { cmd: "remoteControl", action: "lvgl.display_bench", target: "esp32" }
+    }
+  },
+  {
+    id: "esp-matter-starter",
+    title: "ESP Matter Starter",
+    category: "smart",
+    device: "ESP32-S3",
+    badge: "Matter SDK",
+    summary: "Official Espressif Matter SDK lane for secure smart-home device experiments.",
+    sourceName: "Espressif ESP-Matter",
+    sourceUrl: "https://github.com/espressif/esp-matter",
+    installUrl: "https://docs.espressif.com/projects/arduino-esp32/en/latest/matter/matter.html",
+    targetRole: "esp32",
+    flasherTarget: "esp32s3",
+    remoteMode: "json",
+    extraTabs: ["firmware"],
+    setup: {
+      kind: "esp32-remote",
+      label: "Matter starter marker",
+      mode: "json",
+      replCode: "print('nightgrid:matter-starter')",
+      jsonCommand: { cmd: "remoteControl", action: "esp-matter.starter", target: "esp32s3" }
+    }
   }
+];
+
+const sideTabs: Array<{ value: SideTab; label: string; detail: string; icon: typeof Radio }> = [
+  { value: "marketplace", label: "Market", detail: "packs", icon: PackageOpen },
+  { value: "command", label: "Deck", detail: "macros", icon: Zap },
+  { value: "radio", label: "Radio", detail: "GPS / mesh", icon: Radio },
+  { value: "modules", label: "Modules", detail: "ESP32 / tools", icon: Cpu },
+  { value: "flash", label: "Flash", detail: "firmware", icon: Download }
 ];
 
 const roleLabels: Record<DeviceRole, string> = {
@@ -434,9 +665,10 @@ export function App() {
   const [esp32RemoteValue, setEsp32RemoteValue] = useState("1");
   const [esp32RemoteCommand, setEsp32RemoteCommand] = useState("print('nightgrid remote')");
   const [esp32RemoteOutput, setEsp32RemoteOutput] = useState("ESP32 remote control output will appear here.");
-  const [marketplaceFilter, setMarketplaceFilter] = useState<MarketplaceFilter>("all");
+  const [marketplaceFilter, setMarketplaceFilter] = useState<MarketplaceFilter>("featured");
   const [marketplaceBusy, setMarketplaceBusy] = useState("");
   const [marketplaceOutput, setMarketplaceOutput] = useState("Marketplace packs are ready.");
+  const [sideTab, setSideTab] = useState<SideTab>("marketplace");
   const [macroBusy, setMacroBusy] = useState("");
   const [macroOutput, setMacroOutput] = useState("Command deck ready.");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
@@ -489,10 +721,26 @@ export function App() {
   const selectedPathLabel = selectedSession?.path ?? "No port selected";
   const visibleMarketplacePacks = useMemo(
     () =>
-      marketplaceFilter === "all"
+      marketplaceFilter === "featured"
+        ? marketplacePacks.filter((pack) => pack.featured)
+        : marketplaceFilter === "all"
         ? marketplacePacks
-        : marketplacePacks.filter((pack) => pack.category === marketplaceFilter),
+        : marketplacePacks.filter((pack) => pack.category === marketplaceFilter || pack.extraTabs?.includes(marketplaceFilter)),
     [marketplaceFilter]
+  );
+  const marketplaceTabCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        marketplaceFilters.map((filter) => [
+          filter.value,
+          filter.value === "featured"
+            ? marketplacePacks.filter((pack) => pack.featured).length
+            : filter.value === "all"
+              ? marketplacePacks.length
+              : marketplacePacks.filter((pack) => pack.category === filter.value || pack.extraTabs?.includes(filter.value)).length
+        ])
+      ) as Record<MarketplaceFilter, number>,
+    []
   );
 
   const groupedPorts = useMemo(() => {
@@ -1126,6 +1374,25 @@ export function App() {
       );
     } catch (error) {
       setMarketplaceOutput(error instanceof Error ? error.message : `Could not open ${pack.title}.`);
+    } finally {
+      setMarketplaceBusy("");
+    }
+  };
+
+  const grabMarketplacePack = async (pack: MarketplacePack) => {
+    setMarketplaceBusy(`${pack.id}:grab`);
+    try {
+      const url = pack.installUrl ?? pack.sourceUrl;
+      await api.openExternal(url);
+      setMarketplaceOutput(
+        [
+          `Opened grab path for ${pack.title}.`,
+          url,
+          pack.installUrl ? `Source: ${pack.sourceUrl}` : "No separate installer is published for this pack."
+        ].join("\n")
+      );
+    } catch (error) {
+      setMarketplaceOutput(error instanceof Error ? error.message : `Could not grab ${pack.title}.`);
     } finally {
       setMarketplaceBusy("");
     }
@@ -1821,6 +2088,25 @@ export function App() {
         </section>
 
         <aside className="side-stack">
+          <nav className="side-tabs" aria-label="NightGrid tool tabs">
+            {sideTabs.map((tab) => {
+              const TabIcon = tab.icon;
+              return (
+                <button
+                  className={sideTab === tab.value ? "active" : ""}
+                  key={tab.value}
+                  onClick={() => setSideTab(tab.value)}
+                >
+                  <TabIcon size={16} />
+                  <span>{tab.label}</span>
+                  <small>{tab.detail}</small>
+                </button>
+              );
+            })}
+          </nav>
+
+          {sideTab === "command" && (
+            <>
           <section className="panel command-deck-panel">
             <div className="panel-heading">
               <div>
@@ -1843,7 +2129,11 @@ export function App() {
             </div>
             <pre className="mesh-output macro-output">{macroOutput}</pre>
           </section>
+            </>
+          )}
 
+          {sideTab === "marketplace" && (
+            <>
           <section className="panel marketplace-panel">
             <div className="panel-heading">
               <div>
@@ -1854,12 +2144,12 @@ export function App() {
             </div>
             <div className="market-hero">
               <div>
-                <strong>{marketplacePacks.length} Packs</strong>
-                <span>T-Deck, T-Dongle, ESP32, smart-home, and lab flows</span>
+                <strong>{visibleMarketplacePacks.length} / {marketplacePacks.length} Packs</strong>
+                <span>Official source, installer, and setup lanes for field hardware</span>
               </div>
-              <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => setMarketplaceFilter("all")}>
+              <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => setMarketplaceFilter("featured")}>
                 <Sparkles size={15} />
-                Reset
+                Featured
               </button>
             </div>
             <div className="market-tabs" aria-label="Marketplace filters">
@@ -1869,7 +2159,8 @@ export function App() {
                   key={filter.value}
                   onClick={() => setMarketplaceFilter(filter.value)}
                 >
-                  {filter.label}
+                  <span>{filter.label}</span>
+                  <strong>{marketplaceTabCounts[filter.value]}</strong>
                 </button>
               ))}
             </div>
@@ -1890,6 +2181,10 @@ export function App() {
                         <ExternalLink size={15} />
                         Source
                       </button>
+                      <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => grabMarketplacePack(pack)}>
+                        <Download size={15} />
+                        Grab
+                      </button>
                       <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => applyMarketplacePack(pack)}>
                         <Sparkles size={15} />
                         Auto setup
@@ -1909,7 +2204,11 @@ export function App() {
             </div>
             <pre className="mesh-output marketplace-output">{marketplaceOutput}</pre>
           </section>
+            </>
+          )}
 
+          {sideTab === "flash" && (
+            <>
           <section className="panel flasher-panel">
             <div className="panel-heading">
               <div>
@@ -1971,7 +2270,11 @@ export function App() {
             </div>
             <pre className="mesh-output flasher-output">{flasherOutput}</pre>
           </section>
+            </>
+          )}
 
+          {sideTab === "radio" && (
+            <>
           <section className="panel">
             <div className="panel-heading">
               <div>
@@ -2227,7 +2530,11 @@ export function App() {
             </div>
             <pre className="mesh-output bridge-output">{dongleOutput}</pre>
           </section>
+            </>
+          )}
 
+          {sideTab === "modules" && (
+            <>
           <section className="panel">
             <div className="panel-heading">
               <div>
@@ -2496,6 +2803,8 @@ export function App() {
               </button>
             </div>
           </section>
+            </>
+          )}
         </aside>
       </section>
     </main>

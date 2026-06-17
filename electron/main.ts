@@ -37,6 +37,7 @@ const nmeaSentencePattern = /\$(?:GP|GN|GL|GA|GB|GQ)(?:GGA|RMC|GLL|GSA|GSV|VTG),
 const now = () => new Date().toISOString();
 const appIconPath = () =>
   app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(__dirname, "../../build/icon.png");
+const appUserModelId = "digital.itsolutions.nightgrid";
 const nightgridDataDir = () => path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"), "nightgrid-cyberdeck");
 const meshtasticVenvPython = () =>
   process.platform === "win32"
@@ -525,15 +526,39 @@ const downloadFile = (url: string, target: string, redirects = 0) =>
     request.on("error", reject);
   });
 
+const linuxLauncherIconPath = () =>
+  path.join(
+    process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"),
+    "icons",
+    "hicolor",
+    "512x512",
+    "apps",
+    "nightgrid-cyberdeck.png"
+  );
+
+const installLinuxLauncherIcon = async () => {
+  const iconTarget = linuxLauncherIconPath();
+  try {
+    await fsp.mkdir(path.dirname(iconTarget), { recursive: true });
+    await fsp.copyFile(appIconPath(), iconTarget);
+    await fsp.chmod(iconTarget, 0o644);
+    return iconTarget;
+  } catch {
+    return "nightgrid-cyberdeck";
+  }
+};
+
 const writeLinuxDesktopEntry = async (target: string) => {
   const desktopDir = path.join(os.homedir(), ".local", "share", "applications");
   await fsp.mkdir(desktopDir, { recursive: true });
   const desktopFile = path.join(desktopDir, "nightgrid-cyberdeck.desktop");
+  const icon = await installLinuxLauncherIcon();
   const entry = [
     "[Desktop Entry]",
     "Name=NightGrid Cyberdeck",
     "Comment=USB field console for Heltec, T-Deck, Flipper, GPS, Pico, and serial devices",
     `Exec=${target}`,
+    `Icon=${icon}`,
     "Terminal=false",
     "Type=Application",
     "Categories=Utility;Development;",
@@ -938,6 +963,10 @@ const runMeshtastic = async (args: string[], timeoutMs: number): Promise<Command
     stderr: `${failures.join("\n\n")}\n\n${meshtasticInstallHint()}`
   };
 };
+
+if (process.platform === "win32") {
+  app.setAppUserModelId(appUserModelId);
+}
 
 app.whenReady().then(async () => {
   registerIpc();

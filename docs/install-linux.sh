@@ -4,9 +4,12 @@ set -euo pipefail
 repo="${NIGHTGRID_REPO:-Its-ze/nightgrid-cyberdeck}"
 asset="NightGrid-Cyberdeck-Linux-x64.AppImage"
 url="https://github.com/${repo}/releases/latest/download/${asset}"
+icon_url="https://its-ze.github.io/nightgrid-cyberdeck/icon.png"
 primary_install_dir="${NIGHTGRID_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/Applications}}"
 fallback_install_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/nightgrid-cyberdeck"
 meshtastic_venv="${fallback_install_dir}/meshtastic-venv"
+icon_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor/512x512/apps"
+icon_file="${icon_dir}/nightgrid-cyberdeck.png"
 existing=0
 
 can_write_dir() {
@@ -51,6 +54,14 @@ chmod +x "${tmp}"
 mv -f "${tmp}" "${target}"
 trap - EXIT
 
+mkdir -p "${icon_dir}"
+if curl --fail --location --show-error "${icon_url}" -o "${icon_file}"; then
+  chmod 0644 "${icon_file}" || true
+else
+  echo "Could not download NightGrid icon. The app was installed, but your launcher may show a fallback icon."
+  icon_file="nightgrid-cyberdeck"
+fi
+
 desktop_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
 mkdir -p "${desktop_dir}"
 cat > "${desktop_dir}/nightgrid-cyberdeck.desktop" <<EOF
@@ -58,12 +69,14 @@ cat > "${desktop_dir}/nightgrid-cyberdeck.desktop" <<EOF
 Name=NightGrid Cyberdeck
 Comment=USB field console for Heltec, T-Deck, Flipper, GPS, Pico, and serial devices
 Exec=${target}
+Icon=${icon_file}
 Terminal=false
 Type=Application
 Categories=Utility;Development;
 EOF
 
 update-desktop-database "${desktop_dir}" >/dev/null 2>&1 || true
+gtk-update-icon-cache "${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor" >/dev/null 2>&1 || true
 
 setup_meshtastic_cli() {
   if ! command -v python3 >/dev/null 2>&1; then
@@ -103,6 +116,7 @@ else
   echo "Installed NightGrid Cyberdeck at ${target}"
 fi
 echo "Run this installer again any time to update the existing AppImage."
+echo "Launcher icon installed at ${icon_file}"
 echo "If USB serial ports fail to open, add your user to the dialout group and log in again:"
 echo "  sudo usermod -aG dialout \"\$USER\""
 echo "NightGrid Mesh CLI uses the managed Meshtastic venv at:"

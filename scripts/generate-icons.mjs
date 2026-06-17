@@ -5,7 +5,9 @@ import zlib from "node:zlib";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const buildDir = path.join(root, "build");
+const buildIconsDir = path.join(buildDir, "icons");
 const publicDir = path.join(root, "public");
+const docsDir = path.join(root, "docs");
 
 const sizes = [16, 32, 48, 64, 128, 256, 512, 1024];
 const icoSizes = [16, 32, 48, 64, 128, 256];
@@ -216,11 +218,14 @@ const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
 `;
 
 fs.mkdirSync(buildDir, { recursive: true });
+fs.mkdirSync(buildIconsDir, { recursive: true });
 fs.mkdirSync(publicDir, { recursive: true });
+fs.mkdirSync(docsDir, { recursive: true });
 
 const pngEntries = sizes.map((size) => ({ size, data: png(size, size, drawIcon(size)) }));
 for (const entry of pngEntries) {
   fs.writeFileSync(path.join(buildDir, `${entry.size}x${entry.size}.png`), entry.data);
+  fs.writeFileSync(path.join(buildIconsDir, `${entry.size}x${entry.size}.png`), entry.data);
 }
 
 fs.writeFileSync(path.join(buildDir, "icon.png"), pngEntries.find((entry) => entry.size === 512).data);
@@ -228,5 +233,7 @@ fs.writeFileSync(path.join(buildDir, "icon.ico"), ico(pngEntries.filter((entry) 
 fs.writeFileSync(path.join(buildDir, "icon.svg"), iconSvg);
 fs.copyFileSync(path.join(buildDir, "icon.png"), path.join(publicDir, "icon.png"));
 fs.copyFileSync(path.join(buildDir, "icon.svg"), path.join(publicDir, "icon.svg"));
+fs.copyFileSync(path.join(buildDir, "icon.png"), path.join(docsDir, "icon.png"));
+fs.copyFileSync(path.join(buildDir, "icon.svg"), path.join(docsDir, "icon.svg"));
 
 console.log(`Generated NightGrid icons in ${buildDir}`);
