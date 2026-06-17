@@ -734,6 +734,11 @@ const readTextField = (record: Record<string, unknown> | null, key: string) => {
   return typeof value === "string" ? value : "";
 };
 
+const readBooleanField = (record: Record<string, unknown> | null, key: string) => {
+  const value = record?.[key];
+  return typeof value === "boolean" ? value : undefined;
+};
+
 const normalizeUrl = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return defaultDongleGuiUrl;
@@ -781,6 +786,8 @@ export function App() {
   const [dongleGuiSsid, setDongleGuiSsid] = useState(defaultDongleSsid);
   const [dongleGuiChecking, setDongleGuiChecking] = useState(false);
   const [dongleGuiStatus, setDongleGuiStatus] = useState("Not checked");
+  const [dongleUsbStatus, setDongleUsbStatus] = useState("Waiting");
+  const [donglePairStatus, setDonglePairStatus] = useState("Unknown");
   const [dongleText, setDongleText] = useState("");
   const [donglePayloadId, setDonglePayloadId] = useState("remote.deck-ready");
   const [esp32Path, setEsp32Path] = useState("");
@@ -824,6 +831,7 @@ export function App() {
   const donglePathRef = useRef("");
   const esp32PathRef = useRef("");
   const flasherPathRef = useRef("");
+  const lastDongleAttachLogRef = useRef({ key: "", loggedAt: 0 });
   const esp32AutoConnected = useRef(new Set<string>());
   const esp32AutoScanBusy = useRef(false);
 
@@ -1404,6 +1412,71 @@ export function App() {
     }
   };
 
+  const applyDongleAttachFrame = (event: SerialEvent) => {
+    const data = parseCommandJson(event.text);
+    if (data?.type !== "cyberdeck.dongle.attach") return false;
+
+    const name = readTextField(data, "name") || "T-Dongle";
+    const version = readTextField(data, "version");
+    const ip = readTextField(data, "ip");
+    const bridgeUrl = readTextField(data, "bridgeUrl");
+    const apSsid = readTextField(data, "apSsid") || defaultDongleSsid;
+    const deckId = readTextField(data, "deckId");
+    const pairCode = readTextField(data, "pairCode");
+    const paired = readBooleanField(data, "paired");
+    const guiUrl = normalizeUrl(bridgeUrl || ip || defaultDongleGuiUrl);
+
+    if (event.path) {
+      if (event.path !== donglePathRef.current) {
+        donglePathRef.current = event.path;
+        setDonglePath(event.path);
+      }
+      setRoleByPath((current) => {
+        if (current[event.path] === "tdongle") return current;
+        const next = { ...current, [event.path]: "tdongle" as DeviceRole };
+        roleByPathRef.current = next;
+        return next;
+      });
+      setBaudByPath((current) => {
+        if (current[event.path]) return current;
+        const next = { ...current, [event.path]: defaultBaud("tdongle") };
+        baudByPathRef.current = next;
+        return next;
+      });
+    }
+
+    setDongleGuiUrl(guiUrl);
+    setDongleGuiSsid(apSsid);
+    setDongleUsbStatus(version ? `Alive ${version}` : "Alive");
+    setDonglePairStatus(paired === undefined ? (deckId ? `Deck ${deckId}` : "Unknown") : paired ? "Paired" : "Not paired");
+    setDongleGuiStatus((current) =>
+      current === "Reachable" || current.startsWith("Reachable") || current === "Checking" || current === "Join AP"
+        ? current
+        : "Check needed"
+    );
+    if (deckId) setDongleDeckId(deckId);
+    if (pairCode) setDonglePairCode(pairCode);
+
+    const key = [event.path, name, version, apSsid, guiUrl, paired === undefined ? "unknown" : String(paired), deckId].join("|");
+    const nowMs = Date.now();
+    const isRecentDuplicate =
+      key === lastDongleAttachLogRef.current.key && nowMs - lastDongleAttachLogRef.current.loggedAt < 30000;
+    if (!isRecentDuplicate) {
+      lastDongleAttachLogRef.current = { key, loggedAt: nowMs };
+      addLog({
+        channel: "status",
+        at: event.at,
+        path: event.path,
+        role: "tdongle",
+        text: `T-Dongle USB alive: ${name}${version ? ` ${version}` : ""}; AP ${apSsid} at ${guiUrl}; ${
+          paired ? "paired" : "not paired"
+        }.`
+      });
+    }
+
+    return isRecentDuplicate;
+  };
+
   const sendDongleCommandRaw = async (
     command: DongleCommandPayload,
     timeoutMs = 3400,
@@ -1487,9 +1560,14 @@ export function App() {
   const formatDongleGuiCheck = (result: GuiCheckResult, opened: boolean) => {
     const ssid = dongleGuiSsid || defaultDongleSsid;
     const status = result.statusCode ? `HTTP ${result.statusCode}, ${result.elapsedMs} ms` : `${result.elapsedMs} ms`;
+    const usbLine =
+      dongleUsbStatus !== "Waiting"
+        ? `USB status: ${dongleUsbStatus}; pair status: ${donglePairStatus}.`
+        : "No USB attach heartbeat has been seen in this NightGrid session yet.";
     if (result.ok) {
       return [
         `T-Dongle GUI reachable at ${result.url} (${status}).`,
+        usbLine,
         opened ? "Browser opened to the dongle GUI." : "Press Open GUI to launch the page.",
         `If the browser still spins, reconnect this laptop to the ${ssid} Wi-Fi AP and retry.`
       ].join("\n");
@@ -1497,6 +1575,7 @@ export function App() {
 
     return [
       `T-Dongle GUI is not reachable at ${result.url} (${status}).`,
+      usbLine,
       result.message,
       `Join Wi-Fi AP ${ssid} on this laptop, then press Check GUI or Open GUI again.`,
       "USB serial controls still work while Wi-Fi is disconnected."
@@ -1539,11 +1618,11 @@ export function App() {
   };
 
   const checkDongleGui = async () => {
-    await checkDongleGuiReachability(false);
+    return checkDongleGuiReachability(false);
   };
 
   const openDongleGui = async () => {
-    await checkDongleGuiReachability(true);
+    return checkDongleGuiReachability(true);
   };
 
   const openDongleGuiAnyway = async () => {
@@ -2067,10 +2146,13 @@ export function App() {
     await sendEsp32LinkCommand("text", { cmd: "text", text });
   };
 
-  const runDeckMacro = async (label: string, action: () => Promise<void>) => {
+  const runDeckMacro = async (label: string, action: () => Promise<void | boolean>) => {
     setMacroBusy(label);
     try {
-      await action();
+      const result = await action();
+      if (result === false) {
+        throw new Error(`${label} did not complete. Check the matching panel output.`);
+      }
       setMacroOutput(`${label} complete.`);
       addLog({
         channel: "status",
@@ -2163,13 +2245,16 @@ export function App() {
     api.getPlatform().then(setPlatform).catch(() => undefined);
 
     const offData = api.onSerialData((event: SerialEvent) => {
-      addLog({
-        channel: "rx",
-        at: event.at,
-        path: event.path,
-        role: event.role,
-        text: event.text
-      });
+      const suppressDuplicateDongleAttach = applyDongleAttachFrame(event);
+      if (!suppressDuplicateDongleAttach) {
+        addLog({
+          channel: "rx",
+          at: event.at,
+          path: event.path,
+          role: event.role,
+          text: event.text
+        });
+      }
     });
 
     const offStatus = api.onSerialStatus((event: SerialStatusEvent) => {
@@ -3081,6 +3166,8 @@ export function App() {
               <ExternalLink size={16} />
             </div>
             <div className="gps-grid dongle-gui-grid">
+              <Metric label="USB" value={dongleUsbStatus} />
+              <Metric label="Pair" value={donglePairStatus} />
               <Metric label="AP" value={dongleGuiSsid || defaultDongleSsid} />
               <Metric label="GUI" value={normalizeUrl(dongleGuiUrl)} />
               <Metric label="Reach" value={dongleGuiChecking ? "Checking" : dongleGuiStatus} />
