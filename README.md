@@ -20,6 +20,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Serial port scanner with Heltec, T-Deck, T-Dongle, ESP32, Flipper Zero, Pico, GPS, CP210x, and CH340 hints.
 - Role-based connect presets for Heltec/T-Deck mesh, T-Dongle serial, ESP32 modules, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Command Deck macro launcher for selected-device help/status, mesh nodes, GPS push, T-Dongle status, deck-ready payload, ESP32 ping, and memory checks.
+- Curated Marketplace packs for T-Deck, T-Dongle, ESP32, ESP32-S3, WLED, ESPHome, MicroPython, ESP-IDF, Tasmota, and Meshtastic workflows.
 - Top HUD with deck state, session count, selected role, GPS readiness, and ESP32 auto-connect state.
 - Serial console log filters for RX/TX/status plus copy and clear controls.
 - Live serial console with RX/TX/status lanes, line reassembly, and ANSI cleanup for Meshtastic firmware logs.
@@ -56,6 +57,21 @@ irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex
 ```
 
 The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place when that directory is writable. If the current AppImage location is read-only, the installer falls back to `~/.local/share/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage` and updates the desktop launcher. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
+
+## Marketplace Packs
+
+The in-app Marketplace opens curated official source or installer pages and applies NightGrid presets for the matching device role, baud rate, flasher target, and ESP32 Remote mode.
+
+- T-Dongle Field Console from the official LilyGO T-Dongle-S3 project.
+- T-Deck Mesh UI from Meshtastic T-Deck documentation and the Meshtastic web flasher.
+- T-Deck Hardware Lab from official LilyGO T-Deck examples.
+- MicroPython Remote Lab for REPL control and quick GPIO/I2C/Wi-Fi tests.
+- WLED Light Rig with ESP32 GPIO16 smoke-test presets.
+- ESPHome Sensor Node with web installer and JSON Link marker.
+- ESP-IDF Example Bench for official Espressif example projects.
+- Tasmota IoT Console with the official Tasmota web installer.
+
+Marketplace actions do not silently execute third-party repository code. `Source` opens the official project or installer. `Auto setup` configures NightGrid controls. `Run` sends the visible preset command through the same serial controls as the manual panels.
 
 Linux uninstall:
 
@@ -138,8 +154,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.18
-git push origin v0.1.18
+git tag v0.1.19
+git push origin v0.1.19
 ```
 
 The release workflow uploads:
@@ -153,3 +169,4 @@ The release workflow uploads:
 - Meshtastic `--info` can include private channel material. Treat copied output as sensitive.
 - Do not publish captured serial logs unless you have reviewed them.
 - GPS coordinates are displayed locally by default. Pressing `Push fix` or enabling `Auto push` sends the current fix to the selected T-Dongle bridge.
+- Marketplace packs open official external project pages and only send the explicit local preset payload shown by the selected pack.

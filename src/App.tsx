@@ -6,8 +6,10 @@ import {
   Cpu,
   Crosshair,
   Download,
+  ExternalLink,
   Gauge,
   MapPin,
+  PackageOpen,
   Plug,
   Power,
   Radio,
@@ -15,6 +17,7 @@ import {
   Satellite,
   Send,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Terminal,
   Usb,
@@ -44,6 +47,45 @@ interface LogEntry {
 type LogFilter = "all" | "rx" | "tx" | "status";
 type FlasherTarget = "tdeck" | "esp32s3" | "esp32" | "tdongle";
 type Esp32RemoteMode = "repl" | "json";
+type MarketplaceFilter = "all" | "tdeck" | "tdongle" | "esp32" | "smart" | "lab";
+type MarketplaceSetup =
+  | {
+      kind: "esp32-remote";
+      label: string;
+      mode: Esp32RemoteMode;
+      replCode: string;
+      jsonCommand: DongleCommandPayload;
+    }
+  | {
+      kind: "dongle";
+      command: DongleCommandPayload;
+    }
+  | {
+      kind: "mesh-info";
+    }
+  | {
+      kind: "open";
+      url: string;
+    };
+
+interface MarketplacePack {
+  id: string;
+  title: string;
+  category: MarketplaceFilter;
+  device: "T-Deck" | "T-Dongle" | "ESP32" | "ESP32-S3";
+  badge: string;
+  summary: string;
+  sourceName: string;
+  sourceUrl: string;
+  installUrl?: string;
+  targetRole?: DeviceRole;
+  remoteMode?: Esp32RemoteMode;
+  remotePin?: string;
+  remoteValue?: string;
+  remoteCommand?: string;
+  flasherTarget?: FlasherTarget;
+  setup: MarketplaceSetup;
+}
 
 const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 const gpsFreshMs = 6000;
@@ -63,6 +105,158 @@ const esp32RemoteModeLabels: Record<Esp32RemoteMode, string> = {
   repl: "MicroPython REPL",
   json: "JSON Link"
 };
+
+const marketplaceFilters: Array<{ value: MarketplaceFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "tdeck", label: "T-Deck" },
+  { value: "tdongle", label: "T-Dongle" },
+  { value: "esp32", label: "ESP32" },
+  { value: "smart", label: "Smart" },
+  { value: "lab", label: "Lab" }
+];
+
+const marketplacePacks: MarketplacePack[] = [
+  {
+    id: "tdongle-field-console",
+    title: "T-Dongle Field Console",
+    category: "tdongle",
+    device: "T-Dongle",
+    badge: "Display + SD + BLE",
+    summary: "LilyGO T-Dongle-S3 starter lane for display, SD, Wi-Fi, BLE, and USB serial work.",
+    sourceName: "LilyGO T-Dongle-S3",
+    sourceUrl: "https://github.com/Xinyuan-LilyGO/T-Dongle-S3",
+    targetRole: "tdongle",
+    flasherTarget: "tdongle",
+    setup: { kind: "dongle", command: { cmd: "status" } }
+  },
+  {
+    id: "tdeck-mesh-ui",
+    title: "T-Deck Mesh UI",
+    category: "tdeck",
+    device: "T-Deck",
+    badge: "Meshtastic",
+    summary: "Mesh-radio setup for the T-Deck screen, keyboard, trackball, GPS variants, and LoRa console flow.",
+    sourceName: "Meshtastic T-Deck docs",
+    sourceUrl: "https://meshtastic.org/docs/hardware/devices/lilygo/tdeck/",
+    installUrl: "https://flasher.meshtastic.org/",
+    targetRole: "tdeck",
+    flasherTarget: "tdeck",
+    setup: { kind: "mesh-info" }
+  },
+  {
+    id: "lilygo-tdeck-examples",
+    title: "T-Deck Hardware Lab",
+    category: "tdeck",
+    device: "T-Deck",
+    badge: "Keyboard + GPS + LVGL",
+    summary: "Official LilyGO examples for keyboard, LoRaWAN, microphone, touchpad, GPS shield, LVGL, and unit tests.",
+    sourceName: "LilyGO T-Deck repo",
+    sourceUrl: "https://github.com/Xinyuan-LilyGO/T-Deck",
+    targetRole: "tdeck",
+    flasherTarget: "tdeck",
+    setup: { kind: "mesh-info" }
+  },
+  {
+    id: "micropython-remote-lab",
+    title: "MicroPython Remote Lab",
+    category: "esp32",
+    device: "ESP32",
+    badge: "REPL ready",
+    summary: "Fast serial REPL control for sensors, GPIO, I2C, Wi-Fi scan, and quick field scripts.",
+    sourceName: "MicroPython ESP32 docs",
+    sourceUrl: "https://docs.micropython.org/en/latest/esp32/tutorial/intro.html",
+    targetRole: "esp32",
+    remoteMode: "repl",
+    remoteCommand: "import sys, gc\nprint(sys.platform, gc.mem_free())",
+    setup: {
+      kind: "esp32-remote",
+      label: "MicroPython identify",
+      mode: "repl",
+      replCode: "import sys, gc\nprint('nightgrid:micropython sys=%s mem=%s' % (sys.platform, gc.mem_free()))",
+      jsonCommand: { cmd: "remoteControl", action: "micropython.identify" }
+    }
+  },
+  {
+    id: "wled-led-lab",
+    title: "WLED Light Rig",
+    category: "smart",
+    device: "ESP32",
+    badge: "GPIO16 LED",
+    summary: "LED-strip pack with WLED installer link and a local GPIO16 NeoPixel smoke-test command.",
+    sourceName: "WLED getting started",
+    sourceUrl: "https://kno.wled.ge/basics/getting-started/",
+    installUrl: "https://install.wled.me/",
+    targetRole: "esp32",
+    flasherTarget: "esp32",
+    remoteMode: "repl",
+    remotePin: "16",
+    remoteValue: "1",
+    remoteCommand: "from machine import Pin\nPin(16, Pin.OUT).value(1)",
+    setup: {
+      kind: "esp32-remote",
+      label: "WLED GPIO16 smoke test",
+      mode: "repl",
+      replCode: "from machine import Pin\nPin(16, Pin.OUT).value(1)\nprint('nightgrid:wled pin16 high')",
+      jsonCommand: { cmd: "remoteControl", action: "gpio.write", pin: 16, value: 1 }
+    }
+  },
+  {
+    id: "esphome-sensor-node",
+    title: "ESPHome Sensor Node",
+    category: "smart",
+    device: "ESP32",
+    badge: "YAML + OTA",
+    summary: "Smart-home pack for ESPHome Device Builder, Bluetooth proxy, sensors, local control, and OTA updates.",
+    sourceName: "ESPHome",
+    sourceUrl: "https://esphome.io/",
+    installUrl: "https://web.esphome.io/",
+    targetRole: "esp32",
+    remoteMode: "json",
+    remoteCommand: "esphome-node-template",
+    setup: {
+      kind: "esp32-remote",
+      label: "ESPHome host marker",
+      mode: "json",
+      replCode: "print('nightgrid:esphome-ready')",
+      jsonCommand: { cmd: "remoteControl", action: "esphome.template", board: "esp32" }
+    }
+  },
+  {
+    id: "esp-idf-example-bench",
+    title: "ESP-IDF Example Bench",
+    category: "lab",
+    device: "ESP32-S3",
+    badge: "Official SDK",
+    summary: "Espressif example-project bench for Wi-Fi, BLE, storage, peripherals, and native ESP-IDF builds.",
+    sourceName: "ESP-IDF examples",
+    sourceUrl: "https://github.com/espressif/esp-idf/tree/master/examples",
+    targetRole: "esp32",
+    flasherTarget: "esp32s3",
+    remoteMode: "json",
+    setup: {
+      kind: "esp32-remote",
+      label: "ESP-IDF bench marker",
+      mode: "json",
+      replCode: "print('nightgrid:esp-idf-bench')",
+      jsonCommand: { cmd: "remoteControl", action: "esp-idf.examples", target: "esp32s3" }
+    }
+  },
+  {
+    id: "tasmota-iot-console",
+    title: "Tasmota IoT Console",
+    category: "smart",
+    device: "ESP32",
+    badge: "Web installer",
+    summary: "Tasmota pack for ESP32-class IoT control, templates, GPIO mapping, and web-console flashing.",
+    sourceName: "Tasmota getting started",
+    sourceUrl: "https://tasmota.github.io/docs/Getting-Started/",
+    installUrl: "https://tasmota.github.io/install/",
+    targetRole: "esp32",
+    flasherTarget: "esp32",
+    remoteMode: "json",
+    setup: { kind: "open", url: "https://tasmota.github.io/install/" }
+  }
+];
 
 const roleLabels: Record<DeviceRole, string> = {
   heltec: "Heltec mesh",
@@ -240,6 +434,9 @@ export function App() {
   const [esp32RemoteValue, setEsp32RemoteValue] = useState("1");
   const [esp32RemoteCommand, setEsp32RemoteCommand] = useState("print('nightgrid remote')");
   const [esp32RemoteOutput, setEsp32RemoteOutput] = useState("ESP32 remote control output will appear here.");
+  const [marketplaceFilter, setMarketplaceFilter] = useState<MarketplaceFilter>("all");
+  const [marketplaceBusy, setMarketplaceBusy] = useState("");
+  const [marketplaceOutput, setMarketplaceOutput] = useState("Marketplace packs are ready.");
   const [macroBusy, setMacroBusy] = useState("");
   const [macroOutput, setMacroOutput] = useState("Command deck ready.");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
@@ -290,6 +487,13 @@ export function App() {
   const deckState = sessions.length > 0 ? "Online" : ports.length > 0 ? "Ready" : "Standby";
   const selectedRoleLabel = selectedSession ? roleLabels[selectedSession.role] : "No session";
   const selectedPathLabel = selectedSession?.path ?? "No port selected";
+  const visibleMarketplacePacks = useMemo(
+    () =>
+      marketplaceFilter === "all"
+        ? marketplacePacks
+        : marketplacePacks.filter((pack) => pack.category === marketplaceFilter),
+    [marketplaceFilter]
+  );
 
   const groupedPorts = useMemo(() => {
     const known = ports.filter((port) => port.isKnownBoard);
@@ -301,6 +505,20 @@ export function App() {
     setLogs((current) => {
       const next = [...current, { ...entry, id: logCounter.current++ }];
       return next.slice(-700);
+    });
+  };
+
+  const setPortPreset = (path: string, role: DeviceRole, baudRate = defaultBaud(role)) => {
+    if (!path) return;
+    setRoleByPath((current) => {
+      const next = { ...current, [path]: role };
+      roleByPathRef.current = next;
+      return next;
+    });
+    setBaudByPath((current) => {
+      const next = { ...current, [path]: current[path] ?? baudRate };
+      baudByPathRef.current = next;
+      return next;
     });
   };
 
@@ -524,8 +742,10 @@ export function App() {
     try {
       const result = await action();
       setMeshOutput(formatCommandResult(result));
+      return result.ok;
     } catch (error) {
       setMeshOutput(error instanceof Error ? error.message : "Meshtastic command failed.");
+      return false;
     } finally {
       setMeshBusy(false);
     }
@@ -632,29 +852,35 @@ export function App() {
     }
   };
 
-  const runDongleCommand = async (command: DongleCommandPayload, timeoutMs = 3400) => {
-    if (!donglePath) return;
+  const runDongleCommand = async (command: DongleCommandPayload, timeoutMs = 3400, pathOverride = donglePathRef.current || donglePath) => {
+    const commandPath = pathOverride || donglePathRef.current || donglePath;
+    if (!commandPath) {
+      setDongleOutput("Select a T-Dongle serial port first.");
+      return false;
+    }
     setDongleBusy(true);
     try {
-      const result = await api.dongleCommand({ path: donglePath, command, timeoutMs });
+      const result = await api.dongleCommand({ path: commandPath, command, timeoutMs });
       setDongleOutput(formatCommandResult(result));
       addLog({
         channel: "status",
         at: new Date().toISOString(),
-        path: donglePath,
+        path: commandPath,
         role: "tdongle",
         text: result.ok ? `T-Dongle command ${command.cmd} completed.` : `T-Dongle command ${command.cmd} failed.`
       });
+      return result.ok;
     } catch (error) {
       const message = error instanceof Error ? error.message : "T-Dongle command failed.";
       setDongleOutput(message);
       addLog({
         channel: "status",
         at: new Date().toISOString(),
-        path: donglePath,
+        path: commandPath,
         role: "tdongle",
         text: message
       });
+      return false;
     } finally {
       setDongleBusy(false);
     }
@@ -670,8 +896,9 @@ export function App() {
     await runDongleCommand({ cmd: "payload", id: donglePayloadId.trim() });
   };
 
-  const connectEsp32 = async () => {
-    const port = ports.find((item) => item.path === esp32Path) ?? esp32Ports[0];
+  const connectEsp32 = async (pathOverride?: string) => {
+    const targetPath = pathOverride ?? esp32PathRef.current ?? esp32Path;
+    const port = ports.find((item) => item.path === targetPath) ?? esp32Ports[0];
     if (!port) return undefined;
     setEsp32Busy(true);
     try {
@@ -692,7 +919,7 @@ export function App() {
       sessionsRef.current.find((session) => session.path === esp32PathRef.current) ??
       sessionsRef.current.find((session) => session.role === "esp32");
     if (existing) return existing;
-    return connectEsp32();
+    return connectEsp32(esp32PathRef.current);
   };
 
   const runEsp32Action = async (label: string, action: (session: SerialSession) => Promise<void>) => {
@@ -709,6 +936,7 @@ export function App() {
         role: session.role,
         text: `${label} completed.`
       });
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : `${label} failed.`;
       setEsp32Output(message);
@@ -719,6 +947,7 @@ export function App() {
         role: "esp32",
         text: message
       });
+      return false;
     } finally {
       setEsp32Busy(false);
     }
@@ -728,16 +957,21 @@ export function App() {
     await runEsp32Action(label, (session) => writeSession(session, data));
   };
 
-  const formatEsp32RemotePayload = (replCode: string, jsonCommand: DongleCommandPayload) =>
-    esp32RemoteMode === "json"
+  const formatEsp32RemotePayload = (replCode: string, jsonCommand: DongleCommandPayload, mode = esp32RemoteMode) =>
+    mode === "json"
       ? `${JSON.stringify({ protocol: esp32RemoteProtocol, ...jsonCommand })}\n`
       : `${replCode.trimEnd()}\r\n`;
 
-  const sendEsp32RemotePayload = async (label: string, replCode: string, jsonCommand: DongleCommandPayload) => {
-    await runEsp32Action(`ESP32 remote ${label}`, async (session) => {
-      const payload = formatEsp32RemotePayload(replCode, jsonCommand);
+  const sendEsp32RemotePayload = async (
+    label: string,
+    replCode: string,
+    jsonCommand: DongleCommandPayload,
+    mode: Esp32RemoteMode = esp32RemoteMode
+  ) => {
+    return runEsp32Action(`ESP32 remote ${label}`, async (session) => {
+      const payload = formatEsp32RemotePayload(replCode, jsonCommand, mode);
       await writeSession(session, payload);
-      setEsp32RemoteOutput(`Sent ${label} to ${session.path} (${esp32RemoteModeLabels[esp32RemoteMode]})\n${payload.trim()}`);
+      setEsp32RemoteOutput(`Sent ${label} to ${session.path} (${esp32RemoteModeLabels[mode]})\n${payload.trim()}`);
     });
   };
 
@@ -794,6 +1028,155 @@ export function App() {
     const command = esp32RemoteCommand.trim();
     if (!command) return;
     await sendEsp32RemotePayload("custom command", command, { cmd: "remoteCommand", code: command });
+  };
+
+  const findMarketplacePort = (pack: MarketplacePack) => {
+    const role = pack.targetRole;
+    const preferredPath =
+      role === "esp32"
+        ? esp32PathRef.current || esp32Path
+        : role === "tdongle"
+          ? donglePathRef.current || donglePath
+          : role && isMeshRole(role)
+            ? meshPathRef.current || meshPath
+            : "";
+    if (preferredPath && ports.some((port) => port.path === preferredPath)) return preferredPath;
+
+    const candidate =
+      role === "esp32"
+        ? esp32Ports[0] ?? ports.find((port) => isEsp32Candidate(port, roleByPathRef.current[port.path] ?? port.suggestedRole))
+        : role === "tdongle"
+          ? donglePorts[0] ?? ports.find((port) => isDongleCandidate(port, roleByPathRef.current[port.path] ?? port.suggestedRole))
+          : role && isMeshRole(role)
+            ? meshPorts[0] ?? ports.find((port) => isMeshRole(roleByPathRef.current[port.path] ?? port.suggestedRole))
+            : undefined;
+    return candidate?.path ?? preferredPath;
+  };
+
+  const selectMarketplacePort = (pack: MarketplacePack) => {
+    const path = findMarketplacePort(pack);
+    if (path && pack.targetRole) setPortPreset(path, pack.targetRole);
+
+    if (path && pack.targetRole === "esp32") {
+      setEsp32Path(path);
+      esp32PathRef.current = path;
+    }
+    if (path && pack.targetRole === "tdongle") {
+      setDonglePath(path);
+      donglePathRef.current = path;
+    }
+    if (path && pack.targetRole && isMeshRole(pack.targetRole)) {
+      setMeshPath(path);
+      meshPathRef.current = path;
+    }
+    if (pack.flasherTarget) {
+      setFlasherTarget(pack.flasherTarget);
+      if (path) {
+        setFlasherPath(path);
+        flasherPathRef.current = path;
+      }
+    }
+    const setupRemoteMode = pack.setup.kind === "esp32-remote" ? pack.setup.mode : undefined;
+    if (pack.remoteMode || setupRemoteMode) {
+      setEsp32RemoteMode(pack.remoteMode ?? setupRemoteMode ?? esp32RemoteMode);
+    }
+    if (pack.remotePin) setEsp32RemotePin(pack.remotePin);
+    if (pack.remoteValue) setEsp32RemoteValue(pack.remoteValue);
+    if (pack.remoteCommand) {
+      setEsp32RemoteCommand(pack.remoteCommand);
+    } else if (pack.setup.kind === "esp32-remote") {
+      setEsp32RemoteCommand(pack.setup.replCode);
+    }
+
+    return path;
+  };
+
+  const applyMarketplacePack = (pack: MarketplacePack) => {
+    const path = selectMarketplacePort(pack);
+    const lines = [
+      `Loaded ${pack.title}.`,
+      `Source: ${pack.sourceName}`,
+      path ? `Auto selected ${path}${pack.targetRole ? ` as ${roleLabels[pack.targetRole]}` : ""}.` : "No matching port is selected yet. Plug the device in and scan.",
+      pack.flasherTarget ? `Flasher target: ${flasherTargetLabels[pack.flasherTarget]}.` : "",
+      pack.setup.kind === "esp32-remote"
+        ? `Remote mode: ${esp32RemoteModeLabels[pack.remoteMode ?? pack.setup.mode]}.`
+        : pack.setup.kind === "dongle"
+          ? "Run setup sends the T-Dongle preset command."
+          : pack.setup.kind === "mesh-info"
+            ? "Run setup requests Mesh info for the selected T-Deck or Heltec mesh port."
+            : "Run setup opens the official web installer."
+    ].filter(Boolean);
+    setMarketplaceOutput(lines.join("\n"));
+    addLog({
+      channel: "status",
+      at: new Date().toISOString(),
+      path: path || undefined,
+      role: pack.targetRole,
+      text: `Marketplace loaded ${pack.title}.`
+    });
+  };
+
+  const openMarketplaceSource = async (pack: MarketplacePack) => {
+    setMarketplaceBusy(`${pack.id}:source`);
+    try {
+      const url = pack.sourceUrl;
+      await api.openExternal(url);
+      setMarketplaceOutput(
+        [`Opened source for ${pack.title}.`, url, pack.installUrl ? `Installer: ${pack.installUrl}` : ""].filter(Boolean).join("\n")
+      );
+    } catch (error) {
+      setMarketplaceOutput(error instanceof Error ? error.message : `Could not open ${pack.title}.`);
+    } finally {
+      setMarketplaceBusy("");
+    }
+  };
+
+  const runMarketplacePack = async (pack: MarketplacePack) => {
+    setMarketplaceBusy(`${pack.id}:run`);
+    try {
+      const path = selectMarketplacePort(pack);
+      const setup = pack.setup;
+      setMarketplaceOutput(`Running ${pack.title} setup...`);
+
+      if (setup.kind === "esp32-remote") {
+        const targetPath = path || esp32PathRef.current || sessionsRef.current.find((session) => session.role === "esp32")?.path;
+        if (!targetPath) throw new Error("Plug in or select an ESP32 serial module first.");
+        const ok = await sendEsp32RemotePayload(setup.label, setup.replCode, setup.jsonCommand, setup.mode);
+        setMarketplaceOutput(
+          ok ? `Sent ${setup.label} for ${pack.title} to ${targetPath}.` : `${pack.title} could not send. Check the ESP32 output panel.`
+        );
+      } else if (setup.kind === "dongle") {
+        const targetPath = path || donglePathRef.current;
+        if (!targetPath) throw new Error("Plug in or select a T-Dongle serial port first.");
+        const ok = await runDongleCommand(setup.command, 3400, targetPath);
+        setMarketplaceOutput(
+          ok
+            ? `Sent T-Dongle ${setup.command.cmd} preset for ${pack.title} to ${targetPath}.`
+            : `${pack.title} command failed or returned a nonzero status. Check the T-Dongle bridge output.`
+        );
+      } else if (setup.kind === "mesh-info") {
+        const targetPath = path || meshPathRef.current;
+        if (!targetPath) throw new Error("Plug in or select a T-Deck or Heltec mesh serial port first.");
+        const ok = await runMeshCommand(() => api.meshInfo({ path: targetPath }));
+        setMarketplaceOutput(
+          ok ? `Requested Mesh info for ${pack.title} on ${targetPath}.` : `${pack.title} Mesh info failed. Check the Mesh CLI output.`
+        );
+      } else {
+        await api.openExternal(setup.url);
+        setMarketplaceOutput(`Opened installer for ${pack.title}.\n${setup.url}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${pack.title} setup failed.`;
+      setMarketplaceOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        role: pack.targetRole,
+        text: `Marketplace: ${message}`
+      });
+    } finally {
+      setMarketplaceBusy("");
+    }
   };
 
   const runFlasherAction = async (label: string, action: () => Promise<string | void>) => {
@@ -1118,7 +1501,10 @@ export function App() {
       label: "Mesh nodes",
       icon: Radio,
       disabled: meshBusy || !meshPath,
-      action: () => runDeckMacro("Mesh nodes", () => runMeshCommand(() => api.meshNodes({ path: meshPath })))
+      action: () =>
+        runDeckMacro("Mesh nodes", async () => {
+          await runMeshCommand(() => api.meshNodes({ path: meshPath }));
+        })
     },
     {
       label: "GPS push",
@@ -1130,13 +1516,19 @@ export function App() {
       label: "Dongle status",
       icon: Activity,
       disabled: dongleBusy || !donglePath,
-      action: () => runDeckMacro("Dongle status", () => runDongleCommand({ cmd: "status" }))
+      action: () =>
+        runDeckMacro("Dongle status", async () => {
+          await runDongleCommand({ cmd: "status" });
+        })
     },
     {
       label: "Deck ready",
       icon: Power,
       disabled: dongleBusy || !donglePath,
-      action: () => runDeckMacro("Deck ready", () => runDongleCommand({ cmd: "payload", id: "remote.deck-ready" }))
+      action: () =>
+        runDeckMacro("Deck ready", async () => {
+          await runDongleCommand({ cmd: "payload", id: "remote.deck-ready" });
+        })
     },
     {
       label: "ESP32 ping",
@@ -1157,7 +1549,10 @@ export function App() {
       label: "ESP32 remote",
       icon: Activity,
       disabled: !esp32Path || esp32Busy,
-      action: () => runDeckMacro("ESP32 remote", linkEsp32RemoteHost)
+      action: () =>
+        runDeckMacro("ESP32 remote", async () => {
+          await linkEsp32RemoteHost();
+        })
     },
     {
       label: "Memory check",
@@ -1447,6 +1842,72 @@ export function App() {
               })}
             </div>
             <pre className="mesh-output macro-output">{macroOutput}</pre>
+          </section>
+
+          <section className="panel marketplace-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Curated packs</p>
+                <h2>Marketplace</h2>
+              </div>
+              <PackageOpen size={22} />
+            </div>
+            <div className="market-hero">
+              <div>
+                <strong>{marketplacePacks.length} Packs</strong>
+                <span>T-Deck, T-Dongle, ESP32, smart-home, and lab flows</span>
+              </div>
+              <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => setMarketplaceFilter("all")}>
+                <Sparkles size={15} />
+                Reset
+              </button>
+            </div>
+            <div className="market-tabs" aria-label="Marketplace filters">
+              {marketplaceFilters.map((filter) => (
+                <button
+                  className={marketplaceFilter === filter.value ? "active" : ""}
+                  key={filter.value}
+                  onClick={() => setMarketplaceFilter(filter.value)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <div className="market-grid">
+              {visibleMarketplacePacks.map((pack) => {
+                const isBusy = marketplaceBusy.startsWith(pack.id);
+                return (
+                  <article className="market-card" key={pack.id}>
+                    <div className="market-card-top">
+                      <span>{pack.device}</span>
+                      <span>{pack.badge}</span>
+                    </div>
+                    <h3>{pack.title}</h3>
+                    <p>{pack.summary}</p>
+                    <div className="market-source">Source: {pack.sourceName}</div>
+                    <div className="market-actions">
+                      <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => openMarketplaceSource(pack)}>
+                        <ExternalLink size={15} />
+                        Source
+                      </button>
+                      <button className="icon-button compact" disabled={Boolean(marketplaceBusy)} onClick={() => applyMarketplacePack(pack)}>
+                        <Sparkles size={15} />
+                        Auto setup
+                      </button>
+                      <button
+                        className="icon-button compact primary"
+                        disabled={Boolean(marketplaceBusy)}
+                        onClick={() => runMarketplacePack(pack)}
+                      >
+                        <Zap size={15} />
+                        {isBusy ? "Running" : "Run"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <pre className="mesh-output marketplace-output">{marketplaceOutput}</pre>
           </section>
 
           <section className="panel flasher-panel">
