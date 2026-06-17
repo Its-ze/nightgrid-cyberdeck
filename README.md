@@ -19,7 +19,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Serial port scanner with Heltec, T-Deck, T-Dongle, Flipper Zero, Pico, GPS, CP210x, CH340, and ESP32 hints.
 - Role-based connect presets for Heltec/T-Deck mesh, T-Dongle serial, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Live serial console with RX/TX/status lanes, line reassembly, and ANSI cleanup for Meshtastic firmware logs.
-- GPS fix panel for GGA/RMC NMEA sentences, active baud probing, and manual/auto push to the T-Dongle bridge.
+- GPS fix panel for GGA/RMC NMEA sentences, active baud probing, cached fix display, and manual/auto push to the T-Dongle bridge.
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
@@ -130,8 +130,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.12
-git push origin v0.1.12
+git tag v0.1.13
+git push origin v0.1.13
 ```
 
 The release workflow uploads:

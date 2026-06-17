@@ -38,6 +38,8 @@ interface LogEntry {
 }
 
 const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
+const gpsFreshMs = 6000;
+const gpsCacheTtlMs = 120000;
 
 const roleLabels: Record<DeviceRole, string> = {
   heltec: "Heltec mesh",
@@ -86,6 +88,42 @@ const formatTime = (iso: string) =>
 
 const formatCoord = (value?: number) => (typeof value === "number" ? value.toFixed(6) : "No fix");
 
+const hasGpsCoordinates = (fix?: GpsFix | null): fix is GpsFix & { lat: number; lon: number } =>
+  typeof fix?.lat === "number" && typeof fix?.lon === "number";
+
+const hasLiveGpsCoordinates = (fix?: GpsFix | null) => {
+  if (!hasGpsCoordinates(fix)) return false;
+  return !/(?:no fix|void)/i.test(fix.fixQuality ?? "");
+};
+
+const mergeGpsFix = (previous: GpsFix | null, next: GpsFix): GpsFix => {
+  const keepPreviousQuality = !hasLiveGpsCoordinates(next) && hasGpsCoordinates(previous);
+  return {
+    ...next,
+    lat: next.lat ?? previous?.lat,
+    lon: next.lon ?? previous?.lon,
+    altitudeMeters: next.altitudeMeters ?? previous?.altitudeMeters,
+    speedKnots: next.speedKnots ?? previous?.speedKnots,
+    satellites: next.satellites ?? previous?.satellites,
+    fixQuality: keepPreviousQuality ? previous?.fixQuality ?? next.fixQuality : next.fixQuality ?? previous?.fixQuality,
+    utcTime: next.utcTime ?? previous?.utcTime
+  };
+};
+
+const formatGpsAge = (ageMs: number) => {
+  if (ageMs < 1000) return "now";
+  if (ageMs < 60000) return `${Math.round(ageMs / 1000)}s`;
+  return `${Math.round(ageMs / 60000)}m`;
+};
+
+const formatGpsStatus = (fix: GpsFix | null, ageMs: number | null) => {
+  if (!fix) return "Waiting";
+  if (!hasGpsCoordinates(fix)) return fix.fixQuality ?? "Waiting";
+  if (ageMs === null || ageMs <= gpsFreshMs) return fix.fixQuality ?? "Live";
+  if (ageMs <= gpsCacheTtlMs) return `Cached ${formatGpsAge(ageMs)}`;
+  return `Stale ${formatGpsAge(ageMs)}`;
+};
+
 const formatGpsPush = (fix: GpsFix) => {
   const coords =
     typeof fix.lat === "number" && typeof fix.lon === "number"
@@ -127,6 +165,8 @@ export function App() {
   const [gpsProbeOutput, setGpsProbeOutput] = useState("Probe a GPS serial port to confirm NMEA output.");
   const [gpsPushBusy, setGpsPushBusy] = useState(false);
   const [gpsAutoPush, setGpsAutoPush] = useState(false);
+  const [gpsLastFixAt, setGpsLastFixAt] = useState<number | null>(null);
+  const [gpsNow, setGpsNow] = useState(Date.now());
   const [serialInput, setSerialInput] = useState("");
   const [lineEnding, setLineEnding] = useState<"none" | "lf" | "crlf">("lf");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -149,12 +189,16 @@ export function App() {
   const logCounter = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const lastGpsPushAt = useRef(0);
+  const lastGpsPushedFixAt = useRef<number | null>(null);
 
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
   const connectedPaths = new Set(sessions.map((session) => session.path));
   const meshPorts = ports.filter((port) => isMeshRole(port.suggestedRole) || isMeshRole(roleByPath[port.path]));
   const donglePorts = ports.filter((port) => isDongleCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const gpsPorts = ports.filter((port) => isGpsCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
+  const gpsFixAgeMs = gpsLastFixAt === null ? null : Math.max(0, gpsNow - gpsLastFixAt);
+  const gpsCanPush = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
+  const gpsStatus = formatGpsStatus(gpsFix, gpsFixAgeMs);
 
   const groupedPorts = useMemo(() => {
     const known = ports.filter((port) => port.isKnownBoard);
@@ -339,7 +383,7 @@ export function App() {
   };
 
   const pushGpsFix = async (fix: GpsFix | null = gpsFix) => {
-    if (!fix || !donglePath) return;
+    if (!fix || !hasGpsCoordinates(fix) || !donglePath) return;
     const text = formatGpsPush(fix);
     setGpsPushBusy(true);
     try {
@@ -461,7 +505,12 @@ export function App() {
     });
 
     const offGps = api.onGpsFix((event: GpsFix) => {
-      setGpsFix(event);
+      const receivedAt = Date.now();
+      setGpsFix((current) => mergeGpsFix(current?.path === event.path ? current : null, event));
+      if (hasLiveGpsCoordinates(event)) {
+        setGpsLastFixAt(receivedAt);
+        setGpsNow(receivedAt);
+      }
     });
 
     return () => {
@@ -472,16 +521,23 @@ export function App() {
   }, [api]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setGpsNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [logs]);
 
   useEffect(() => {
-    if (!gpsAutoPush || !gpsFix || !donglePath || gpsPushBusy) return;
+    if (!gpsAutoPush || !gpsFix || !gpsCanPush || !donglePath || gpsPushBusy || gpsLastFixAt === null) return;
+    if (lastGpsPushedFixAt.current === gpsLastFixAt) return;
     const elapsed = Date.now() - lastGpsPushAt.current;
     if (elapsed < 15000) return;
     lastGpsPushAt.current = Date.now();
+    lastGpsPushedFixAt.current = gpsLastFixAt;
     void pushGpsFix(gpsFix);
-  }, [gpsAutoPush, gpsFix, donglePath, gpsPushBusy]);
+  }, [gpsAutoPush, gpsFix, gpsCanPush, gpsLastFixAt, donglePath, gpsPushBusy]);
 
   return (
     <main className="app-shell">
@@ -678,12 +734,20 @@ export function App() {
               <Metric label="Satellites" value={gpsFix?.satellites?.toString() ?? "Unknown"} />
               <Metric label="Altitude" value={typeof gpsFix?.altitudeMeters === "number" ? `${gpsFix.altitudeMeters.toFixed(1)} m` : "Unknown"} />
               <Metric label="Speed" value={typeof gpsFix?.speedKnots === "number" ? `${gpsFix.speedKnots.toFixed(1)} kt` : "Unknown"} />
-              <Metric label="Status" value={gpsFix?.fixQuality ?? "Waiting"} />
+              <Metric label="Status" value={gpsStatus} />
             </div>
             <div className="gps-controls">
               <label>
                 GPS port
-                <select value={gpsPath} onChange={(event) => setGpsPath(event.target.value)}>
+                <select
+                  value={gpsPath}
+                  onChange={(event) => {
+                    setGpsPath(event.target.value);
+                    setGpsFix(null);
+                    setGpsLastFixAt(null);
+                    lastGpsPushedFixAt.current = null;
+                  }}
+                >
                   <option value="">Select port</option>
                   {(gpsPorts.length ? gpsPorts : ports).map((port) => (
                     <option value={port.path} key={port.path}>
@@ -712,7 +776,7 @@ export function App() {
                 <Plug size={15} />
                 Connect GPS
               </button>
-              <button className="icon-button primary" disabled={!gpsFix || !donglePath || gpsPushBusy} onClick={() => pushGpsFix()}>
+              <button className="icon-button primary" disabled={!gpsCanPush || !donglePath || gpsPushBusy} onClick={() => pushGpsFix()}>
                 <Send size={15} />
                 Push fix
               </button>
