@@ -24,12 +24,22 @@ const previewPorts: DevicePort[] = [
   },
   {
     path: "/dev/ttyACM2",
-    friendlyName: "Espressif Systems LilyGO T-Deck 303A:1001",
-    manufacturer: "Espressif Systems LilyGO T-Deck",
+    friendlyName: "Espressif Systems LILYGO ESP32-S3 T-Deck/T-Dongle 303A:1001",
+    manufacturer: "Espressif Systems LILYGO ESP32-S3",
     vendorId: "303A",
     productId: "1001",
     suggestedRole: "tdeck",
-    tags: ["T-Deck", "ESP32-S3", "Meshtastic"],
+    tags: ["LILYGO ESP32-S3", "T-Deck/T-Dongle", "USB serial"],
+    isKnownBoard: true
+  },
+  {
+    path: "/dev/ttyACM3",
+    friendlyName: "LILYGO T-Dongle S3 USB serial 303A:1001",
+    manufacturer: "LILYGO T-Dongle S3",
+    vendorId: "303A",
+    productId: "1001",
+    suggestedRole: "tdongle",
+    tags: ["T-Dongle", "ESP32-S3", "USB serial"],
     isKnownBoard: true
   },
   {
@@ -111,8 +121,10 @@ export const createPreviewApi = (): NightGridApi => {
           ? "MicroPython v1.x on Raspberry Pi Pico\r\n>>>"
           : role === "flipper"
             ? "Flipper Zero CLI preview\r\n>: "
+            : role === "tdongle"
+              ? "T-Dongle USB serial preview ready\r\n"
             : role === "tdeck"
-              ? "T-Deck Meshtastic USB serial preview ready\r\n"
+              ? "T-Deck / ESP32-S3 USB serial preview ready\r\n"
               : "NightGrid preview stream ready\r\n";
       emitData(session, greeting);
       if (role === "gps") {
@@ -149,7 +161,7 @@ export const createPreviewApi = (): NightGridApi => {
     },
     probeMeshCli: async () => result("meshtastic --version", "Meshtastic CLI preview available\n"),
     meshInfo: async ({ path }: { path: string }) =>
-      result(`meshtastic --port ${path} --info`, "Preview mesh radio\nhardware: Heltec V3 or T-Deck\nfirmware: meshtastic\nrole: CLIENT\n"),
+      result(`meshtastic --port ${path} --info`, "Preview mesh radio\nhardware: Heltec V3 or T-Deck / ESP32-S3\nfirmware: meshtastic\nrole: CLIENT\n"),
     meshNodes: async ({ path }: { path: string }) =>
       result(`meshtastic --port ${path} --nodes`, "!preview Node, last heard now, SNR 8.5\n"),
     meshSendText: async ({ path, message }: { path: string; message: string; channelIndex?: number }) =>

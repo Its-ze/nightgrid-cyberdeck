@@ -43,6 +43,8 @@ const emitStatus = (event: Omit<SerialStatusEvent, "at">) => {
 
 const normalizeUsbId = (value?: string) => value?.toUpperCase().padStart(4, "0");
 
+const hasAny = (haystack: string, needles: string[]) => needles.some((needle) => haystack.includes(needle));
+
 const classifyPort = (port: ListedPort): DevicePort => {
   const manufacturer = port.manufacturer ?? "";
   const listedName = "friendlyName" in port && typeof port.friendlyName === "string" ? port.friendlyName : "";
@@ -53,15 +55,19 @@ const classifyPort = (port: ListedPort): DevicePort => {
   const tags: string[] = [];
   let suggestedRole: DeviceRole = "console";
 
-  const isTDeck =
-    haystack.includes("t-deck") ||
-    haystack.includes("tdeck") ||
-    haystack.includes("lilygo t-deck") ||
-    (vendorId === "303A" && productId === "1001");
+  const isEsp32S3UsbJtag = vendorId === "303A" && productId === "1001";
+  const isTDeck = hasAny(haystack, ["t-deck", "tdeck", "lilygo t-deck"]);
+  const isTDongle = hasAny(haystack, ["t-dongle", "tdongle", "t dongle", "lilygo esp32-s3 dongle"]);
   const isFlipper = haystack.includes("flipper") || (vendorId === "0483" && productId === "5740");
 
   if (isTDeck) {
     tags.push("T-Deck", "ESP32-S3", "Meshtastic");
+    suggestedRole = "tdeck";
+  } else if (isTDongle) {
+    tags.push("T-Dongle", "ESP32-S3", "USB serial");
+    suggestedRole = "tdongle";
+  } else if (isEsp32S3UsbJtag) {
+    tags.push("LILYGO ESP32-S3", "T-Deck/T-Dongle", "USB serial");
     suggestedRole = "tdeck";
   } else if (isFlipper) {
     tags.push("Flipper Zero", "CLI");
@@ -258,32 +264,81 @@ const writeLinuxDesktopEntry = async (target: string) => {
   await fsp.writeFile(desktopFile, entry, "utf8");
 };
 
-const installLinuxUpdate = async (): Promise<UpdateResult> => {
-  const url = `${releaseBaseUrl}/${linuxAppImageAsset}`;
-  const target = process.env.APPIMAGE || path.join(os.homedir(), "Applications", "NightGrid-Cyberdeck.AppImage");
+const uniquePaths = (paths: string[]) => [...new Set(paths.filter(Boolean))];
+
+const linuxAppImageTargetCandidates = () => {
+  const configuredInstallDir = process.env.NIGHTGRID_INSTALL_DIR || process.env.XDG_BIN_HOME || path.join(os.homedir(), "Applications");
+  const fallbackInstallDir = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"), "nightgrid-cyberdeck");
+  return uniquePaths([
+    process.env.APPIMAGE ?? "",
+    path.join(configuredInstallDir, "NightGrid-Cyberdeck.AppImage"),
+    path.join(fallbackInstallDir, "NightGrid-Cyberdeck.AppImage")
+  ]);
+};
+
+const assertWritableDirectory = async (dir: string) => {
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.access(dir, fs.constants.W_OK);
+  const probe = path.join(dir, `.nightgrid-write-test-${process.pid}-${Date.now()}`);
+  await fsp.writeFile(probe, "");
+  await fsp.rm(probe, { force: true });
+};
+
+const replaceLinuxAppImage = async (source: string, target: string) => {
   const installDir = path.dirname(target);
-  await fsp.mkdir(installDir, { recursive: true });
-  const tmp = path.join(installDir, `.NightGrid-Cyberdeck.AppImage.${process.pid}.download`);
+  await assertWritableDirectory(installDir);
+  const tmp = path.join(installDir, `.NightGrid-Cyberdeck.AppImage.${process.pid}.${Date.now()}.download`);
 
   try {
-    await downloadFile(url, tmp);
+    await fsp.copyFile(source, tmp);
     await fsp.chmod(tmp, 0o755);
     await fsp.rename(tmp, target);
-    await writeLinuxDesktopEntry(target);
+    await fsp.chmod(target, 0o755);
   } catch (error) {
     await fsp.rm(tmp, { force: true }).catch(() => undefined);
     throw error;
   }
+};
 
-  return {
-    ok: true,
-    platform: process.platform,
-    version: app.getVersion(),
-    target,
-    url,
-    restartRequired: true,
-    message: `Updated NightGrid at ${target}. Restart the app to run the new version.`
-  };
+const installLinuxUpdate = async (): Promise<UpdateResult> => {
+  const url = `${releaseBaseUrl}/${linuxAppImageAsset}`;
+  const stagingDir = path.join(app.getPath("temp"), "nightgrid-cyberdeck-updates");
+  await fsp.mkdir(stagingDir, { recursive: true });
+  const download = path.join(stagingDir, `NightGrid-Cyberdeck.AppImage.${process.pid}.${Date.now()}.download`);
+  const targets = linuxAppImageTargetCandidates();
+  const firstTarget = targets[0];
+  const failures: string[] = [];
+
+  try {
+    await downloadFile(url, download);
+    await fsp.chmod(download, 0o755);
+
+    for (const target of targets) {
+      try {
+        await replaceLinuxAppImage(download, target);
+        await writeLinuxDesktopEntry(target);
+
+        const moved = target !== firstTarget;
+        return {
+          ok: true,
+          platform: process.platform,
+          version: app.getVersion(),
+          target,
+          url,
+          restartRequired: true,
+          message: moved
+            ? `Updated NightGrid at ${target}. The current AppImage location was not writable, so the launcher was moved. Restart the app from the menu to run the new version.`
+            : `Updated NightGrid at ${target}. Restart the app to run the new version.`
+        };
+      } catch (error) {
+        failures.push(`${target}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  } finally {
+    await fsp.rm(download, { force: true }).catch(() => undefined);
+  }
+
+  throw new Error(`Could not install the update. Tried ${failures.join(" | ")}`);
 };
 
 const installWindowsUpdate = async (): Promise<UpdateResult> => {

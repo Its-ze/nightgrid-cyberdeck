@@ -6,7 +6,7 @@
     <title>NightGrid Cyberdeck Installer</title>
     <meta
       name="description"
-      content="Install NightGrid Cyberdeck, a dark USB field console for Heltec V3, LilyGO T-Deck, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial devices."
+      content="Install NightGrid Cyberdeck, a dark USB field console for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial devices."
     />
     <style>
       :root {
@@ -205,8 +205,8 @@
           <p class="eyebrow">Linux and Windows field deck</p>
           <h1>NightGrid Cyberdeck</h1>
           <p class="lede">
-            A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, Flipper Zero, GPS modules,
-            Raspberry Pi Picos, and serial consoles. Scan ports, watch NMEA fixes, run Flipper and Pico quick
+            A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle boards,
+            Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, watch NMEA fixes, run Flipper and Pico quick
             commands, and bridge into Meshtastic from one local app.
           </p>
           <div class="actions">
@@ -220,12 +220,12 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.6</span>
+            <span>NIGHTGRID 0.1.7</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
             <div><span>Updater</span><strong>Install / uninstall</strong></div>
-            <div><span>Heltec / T-Deck</span><strong>Mesh CLI ready</strong></div>
+            <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
             <div><span>GPS NMEA</span><strong>GGA/RMC parser</strong></div>
           </div>
@@ -235,7 +235,7 @@
       <section class="grid">
         <article class="card">
           <h2>Linux Install / Update</h2>
-          <p>Downloads the latest AppImage, marks it executable, and replaces the existing launcher target if already installed.</p>
+          <p>Downloads the latest AppImage, marks it executable, and uses a writable per-user fallback if the current app directory is read-only.</p>
           <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
         </article>
         <article class="card">
@@ -250,7 +250,7 @@
         </article>
         <article class="card">
           <h2>Linux Uninstall</h2>
-          <p>Removes the AppImage, launcher, and installed deb package if present. App settings are preserved unless you opt into purge.</p>
+          <p>Removes the AppImage from standard and fallback locations, plus the launcher and installed deb package if present. App settings are preserved unless you opt into purge.</p>
           <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/uninstall-linux.sh | bash</code>
         </article>
         <article class="card">

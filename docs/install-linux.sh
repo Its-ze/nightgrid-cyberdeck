@@ -4,16 +4,41 @@ set -euo pipefail
 repo="${NIGHTGRID_REPO:-Its-ze/nightgrid-cyberdeck}"
 asset="NightGrid-Cyberdeck-Linux-x64.AppImage"
 url="https://github.com/${repo}/releases/latest/download/${asset}"
-install_dir="${NIGHTGRID_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/Applications}}"
-target="${install_dir}/NightGrid-Cyberdeck.AppImage"
+primary_install_dir="${NIGHTGRID_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/Applications}}"
+fallback_install_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/nightgrid-cyberdeck"
 existing=0
 
+can_write_dir() {
+  local dir="$1"
+  local probe
+  mkdir -p "${dir}" 2>/dev/null || return 1
+  probe="${dir}/.nightgrid-write-test.$$"
+  : > "${probe}" 2>/dev/null || return 1
+  rm -f -- "${probe}"
+}
+
+choose_target() {
+  if can_write_dir "${primary_install_dir}"; then
+    printf '%s\n' "${primary_install_dir}/NightGrid-Cyberdeck.AppImage"
+    return 0
+  fi
+
+  if can_write_dir "${fallback_install_dir}"; then
+    printf '%s\n' "${fallback_install_dir}/NightGrid-Cyberdeck.AppImage"
+    return 0
+  fi
+
+  echo "No writable NightGrid install directory found." >&2
+  echo "Tried ${primary_install_dir} and ${fallback_install_dir}" >&2
+  return 1
+}
+
+target="$(choose_target)"
 if [[ -f "${target}" ]]; then
   existing=1
 fi
 
-mkdir -p "${install_dir}"
-tmp="$(mktemp "${install_dir}/.NightGrid-Cyberdeck.AppImage.XXXXXX")"
+tmp="$(mktemp "${TMPDIR:-/tmp}/NightGrid-Cyberdeck.AppImage.XXXXXX")"
 cleanup() {
   rm -f "${tmp}"
 }

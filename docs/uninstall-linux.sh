@@ -3,14 +3,17 @@ set -euo pipefail
 
 install_dir="${NIGHTGRID_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/Applications}}"
 target="${install_dir}/NightGrid-Cyberdeck.AppImage"
+fallback_target="${XDG_DATA_HOME:-${HOME}/.local/share}/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage"
 desktop_file="${XDG_DATA_HOME:-${HOME}/.local/share}/applications/nightgrid-cyberdeck.desktop"
 removed=0
 
-if [[ -f "${target}" ]]; then
-  rm -f -- "${target}"
-  echo "Removed ${target}"
-  removed=1
-fi
+for appimage in "${target}" "${fallback_target}"; do
+  if [[ -f "${appimage}" ]]; then
+    rm -f -- "${appimage}"
+    echo "Removed ${appimage}"
+    removed=1
+  fi
+done
 
 if [[ -f "${desktop_file}" ]]; then
   rm -f -- "${desktop_file}"

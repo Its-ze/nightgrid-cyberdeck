@@ -40,7 +40,8 @@ const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 
 const roleLabels: Record<DeviceRole, string> = {
   heltec: "Heltec mesh",
-  tdeck: "T-Deck mesh",
+  tdeck: "T-Deck / ESP32-S3 mesh",
+  tdongle: "T-Dongle console",
   gps: "GPS NMEA",
   pico: "Pico console",
   flipper: "Flipper Zero",
@@ -50,6 +51,7 @@ const roleLabels: Record<DeviceRole, string> = {
 const roleIcons: Record<DeviceRole, typeof Radio> = {
   heltec: Radio,
   tdeck: Radio,
+  tdongle: Cpu,
   gps: Satellite,
   pico: Cpu,
   flipper: Cpu,

@@ -6,6 +6,7 @@ It is built for:
 
 - Heltec V3 / ESP32-S3 mesh boards over USB-C
 - LilyGO T-Deck mesh radios when they appear as USB serial
+- LILYGO T-Dongle / ESP32-S3 USB serial devices
 - Flipper Zero over its USB CLI serial port
 - USB GPS modules that emit NMEA sentences
 - Raspberry Pi Pico boards running MicroPython or CircuitPython
@@ -15,8 +16,8 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 
 ## Features
 
-- Serial port scanner with Heltec, T-Deck, Flipper Zero, Pico, GPS, CP210x, CH340, and ESP32 hints.
-- Role-based connect presets for Heltec/T-Deck mesh, Flipper CLI, GPS NMEA, Pico console, and generic serial.
+- Serial port scanner with Heltec, T-Deck, T-Dongle, Flipper Zero, Pico, GPS, CP210x, CH340, and ESP32 hints.
+- Role-based connect presets for Heltec/T-Deck mesh, T-Dongle serial, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Live serial console with RX/TX/status lanes.
 - GPS fix panel for GGA/RMC NMEA sentences.
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
@@ -44,7 +45,7 @@ Windows quick install or update from PowerShell:
 irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex
 ```
 
-The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
+The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place when that directory is writable. If the current AppImage location is read-only, the installer falls back to `~/.local/share/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage` and updates the desktop launcher. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
 
 Linux uninstall:
 
@@ -120,8 +121,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 The release workflow uploads:
