@@ -10,6 +10,7 @@ import type {
   CommandResult,
   DevicePort,
   DeviceRole,
+  DongleCommandPayload,
   GpsFix,
   SerialEvent,
   SerialSession,
@@ -218,6 +219,107 @@ const writeSerialPort = (session: LiveSession, data: string) =>
       else session.port.drain((drainError) => (drainError ? reject(drainError) : resolve()));
     });
   });
+
+const openRawSerialPort = (port: SerialPort) =>
+  new Promise<void>((resolve, reject) => {
+    port.open((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+
+const closeRawSerialPort = (port: SerialPort) =>
+  new Promise<void>((resolve) => {
+    if (!port.isOpen) {
+      resolve();
+      return;
+    }
+    port.close(() => resolve());
+  });
+
+const writeRawSerialPort = (port: SerialPort, data: string) =>
+  new Promise<void>((resolve, reject) => {
+    port.write(data, (error) => {
+      if (error) reject(error);
+      else port.drain((drainError) => (drainError ? reject(drainError) : resolve()));
+    });
+  });
+
+const describeDongleCommand = (pathName: string, command: DongleCommandPayload) => {
+  const { cmd, ...rest } = command;
+  const details = Object.entries(rest)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(" ");
+  return `tdongle --port ${pathName} ${cmd}${details ? ` ${details}` : ""}`;
+};
+
+const runDongleCommand = async (
+  pathName: string,
+  command: DongleCommandPayload,
+  timeoutMs = 3200
+): Promise<CommandResult> => {
+  const commandLine = describeDongleCommand(pathName, command);
+  const line = `${JSON.stringify(command)}\n`;
+  const existing = [...sessions.values()].find((session) => session.path === pathName);
+  let stdout = "";
+
+  if (existing) {
+    const onData = (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    };
+    existing.port.on("data", onData);
+    try {
+      await writeSerialPort(existing, line);
+      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    } finally {
+      existing.port.off("data", onData);
+    }
+
+    return {
+      ok: true,
+      command: commandLine,
+      code: 0,
+      stdout: stdout.trim() || "Command sent to active T-Dongle serial session. Watch Live Traffic for the response.",
+      stderr: ""
+    };
+  }
+
+  const port = new SerialPort({
+    path: pathName,
+    baudRate: 115200,
+    autoOpen: false
+  });
+
+  const onData = (chunk: Buffer) => {
+    stdout += chunk.toString("utf8");
+  };
+
+  port.on("data", onData);
+  try {
+    await openRawSerialPort(port);
+    await writeRawSerialPort(port, line);
+    await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    return {
+      ok: true,
+      command: commandLine,
+      code: 0,
+      stdout: stdout.trim() || "Command sent, but no T-Dongle response was received before timeout.",
+      stderr: ""
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      command: commandLine,
+      code: null,
+      stdout: stdout.trim(),
+      stderr: error instanceof Error ? error.message : String(error)
+    };
+  } finally {
+    port.off("data", onData);
+    await closeRawSerialPort(port);
+  }
+};
 
 const downloadFile = (url: string, target: string, redirects = 0) =>
   new Promise<void>((resolve, reject) => {
@@ -485,6 +587,15 @@ const registerIpc = () => {
       args.push("--ch-index", String(request.channelIndex));
     }
     return runMeshtastic(args, 45000);
+  });
+
+  ipcMain.handle("dongle:command", async (_, request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) => {
+    if (!request?.path) throw new Error("T-Dongle port is required.");
+    if (!request.command || typeof request.command !== "object" || typeof request.command.cmd !== "string") {
+      throw new Error("T-Dongle command must include a cmd string.");
+    }
+    const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 3200, 800), 12000);
+    return runDongleCommand(request.path, request.command, timeoutMs);
   });
 
   ipcMain.handle("system:platform", async () => ({

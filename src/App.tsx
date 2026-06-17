@@ -21,6 +21,7 @@ import type {
   CommandResult,
   DevicePort,
   DeviceRole,
+  DongleCommandPayload,
   GpsFix,
   SerialEvent,
   SerialSession,
@@ -62,6 +63,13 @@ const defaultBaud = (role: DeviceRole) => (role === "gps" ? 9600 : 115200);
 
 const isMeshRole = (role?: DeviceRole) => role === "heltec" || role === "tdeck";
 
+const isDongleCandidate = (port: DevicePort, role?: DeviceRole) =>
+  role === "tdongle" ||
+  port.suggestedRole === "tdongle" ||
+  (port.vendorId === "303A" && port.productId === "1001") ||
+  port.tags.some((tag) => /t-dongle|t-deck\/t-dongle|lilygo esp32-s3/i.test(tag)) ||
+  /t-dongle|tdongle|lilygo esp32-s3/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
+
 const formatTime = (iso: string) =>
   new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -98,6 +106,14 @@ export function App() {
   const [meshMessage, setMeshMessage] = useState("");
   const [meshChannel, setMeshChannel] = useState("0");
   const [meshPath, setMeshPath] = useState("");
+  const [donglePath, setDonglePath] = useState("");
+  const [dongleBusy, setDongleBusy] = useState(false);
+  const [dongleOutput, setDongleOutput] = useState("T-Dongle bridge output will appear here.");
+  const [dongleDeckId, setDongleDeckId] = useState("itsz-tdeck");
+  const [dongleDeckName, setDongleDeckName] = useState("ITSZ T-Deck");
+  const [donglePairCode, setDonglePairCode] = useState("");
+  const [dongleText, setDongleText] = useState("");
+  const [donglePayloadId, setDonglePayloadId] = useState("remote.deck-ready");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
@@ -107,6 +123,7 @@ export function App() {
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
   const connectedPaths = new Set(sessions.map((session) => session.path));
   const meshPorts = ports.filter((port) => isMeshRole(port.suggestedRole) || isMeshRole(roleByPath[port.path]));
+  const donglePorts = ports.filter((port) => isDongleCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
 
   const groupedPorts = useMemo(() => {
     const known = ports.filter((port) => port.isKnownBoard);
@@ -143,6 +160,12 @@ export function App() {
       if (!meshPath) {
         const meshPort = nextPorts.find((port) => isMeshRole(port.suggestedRole));
         if (meshPort) setMeshPath(meshPort.path);
+      }
+      if (!donglePath) {
+        const donglePort =
+          nextPorts.find((port) => port.suggestedRole === "tdongle") ??
+          nextPorts.find((port) => isDongleCandidate(port, port.suggestedRole));
+        if (donglePort) setDonglePath(donglePort.path);
       }
       addLog({
         channel: "status",
@@ -221,6 +244,44 @@ export function App() {
         channelIndex: Number.isFinite(channelIndex) ? channelIndex : undefined
       })
     );
+  };
+
+  const runDongleCommand = async (command: DongleCommandPayload, timeoutMs = 3400) => {
+    if (!donglePath) return;
+    setDongleBusy(true);
+    try {
+      const result = await api.dongleCommand({ path: donglePath, command, timeoutMs });
+      setDongleOutput(formatCommandResult(result));
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: donglePath,
+        role: "tdongle",
+        text: result.ok ? `T-Dongle command ${command.cmd} completed.` : `T-Dongle command ${command.cmd} failed.`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "T-Dongle command failed.";
+      setDongleOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: donglePath,
+        role: "tdongle",
+        text: message
+      });
+    } finally {
+      setDongleBusy(false);
+    }
+  };
+
+  const sendDongleText = async () => {
+    if (!dongleText.trim()) return;
+    await runDongleCommand({ cmd: "text", text: dongleText.trim() });
+  };
+
+  const sendDonglePayload = async () => {
+    if (!donglePayloadId.trim()) return;
+    await runDongleCommand({ cmd: "payload", id: donglePayloadId.trim() });
   };
 
   const installUpdate = async () => {
@@ -546,6 +607,133 @@ export function App() {
               </button>
             </div>
             <pre className="mesh-output">{meshOutput}</pre>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">T-Dongle</p>
+                <h2>Wireless Bridge</h2>
+              </div>
+              <Plug size={22} />
+            </div>
+            <label>
+              Bridge port
+              <select value={donglePath} onChange={(event) => setDonglePath(event.target.value)}>
+                <option value="">Select port</option>
+                {(donglePorts.length ? donglePorts : ports).map((port) => (
+                  <option value={port.path} key={port.path}>
+                    {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="bridge-grid">
+              <label>
+                Deck ID
+                <input value={dongleDeckId} onChange={(event) => setDongleDeckId(event.target.value)} />
+              </label>
+              <label>
+                Deck name
+                <input value={dongleDeckName} onChange={(event) => setDongleDeckName(event.target.value)} />
+              </label>
+            </div>
+            <div className="button-grid">
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "attachProbe", deckId: dongleDeckId, deckName: dongleDeckName })}
+              >
+                <Crosshair size={15} />
+                Probe
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "status" })}
+              >
+                <Activity size={15} />
+                Status
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "pairBegin", deckId: dongleDeckId, deckName: dongleDeckName })}
+              >
+                <Radio size={15} />
+                Pair begin
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath || !donglePairCode.trim()}
+                onClick={() =>
+                  runDongleCommand({
+                    cmd: "pairConfirm",
+                    deckId: dongleDeckId,
+                    deckName: dongleDeckName,
+                    code: donglePairCode.trim()
+                  })
+                }
+              >
+                <ShieldCheck size={15} />
+                Confirm
+              </button>
+            </div>
+            <input
+              className="solo-input"
+              value={donglePairCode}
+              onChange={(event) => setDonglePairCode(event.target.value)}
+              placeholder="Pair code"
+            />
+            <div className="button-grid">
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "payload", id: "remote.deck-ready" })}
+              >
+                <Power size={15} />
+                Deck ready
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "payload", id: "remote.dongle-auto-pair" })}
+              >
+                <Plug size={15} />
+                Auto pair
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "control", action: "launcher" })}
+              >
+                <Terminal size={15} />
+                Launcher
+              </button>
+              <button
+                className="icon-button"
+                disabled={dongleBusy || !donglePath}
+                onClick={() => runDongleCommand({ cmd: "control", action: "refresh" })}
+              >
+                <RefreshCw size={15} />
+                Refresh
+              </button>
+            </div>
+            <div className="bridge-send">
+              <input value={dongleText} onChange={(event) => setDongleText(event.target.value)} placeholder="Text event" />
+              <button className="icon-button primary" disabled={dongleBusy || !donglePath || !dongleText.trim()} onClick={sendDongleText}>
+                <Send size={15} />
+                Text
+              </button>
+            </div>
+            <div className="bridge-send">
+              <input value={donglePayloadId} onChange={(event) => setDonglePayloadId(event.target.value)} placeholder="Payload ID" />
+              <button className="icon-button" disabled={dongleBusy || !donglePath || !donglePayloadId.trim()} onClick={sendDonglePayload}>
+                <Download size={15} />
+                Payload
+              </button>
+            </div>
+            <pre className="mesh-output bridge-output">{dongleOutput}</pre>
           </section>
 
           <section className="panel">

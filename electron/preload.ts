@@ -3,6 +3,7 @@ import type {
   CommandResult,
   DevicePort,
   DeviceRole,
+  DongleCommandPayload,
   GpsFix,
   NightGridApi,
   SerialEvent,
@@ -29,6 +30,8 @@ const api: NightGridApi = {
   meshNodes: (request: { path: string }) => ipcRenderer.invoke("mesh:nodes", request) as Promise<CommandResult>,
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) =>
     ipcRenderer.invoke("mesh:send-text", request) as Promise<CommandResult>,
+  dongleCommand: (request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) =>
+    ipcRenderer.invoke("dongle:command", request) as Promise<CommandResult>,
   getPlatform: () => ipcRenderer.invoke("system:platform") as Promise<{ platform: NodeJS.Platform; version: string }>,
   installUpdate: () => ipcRenderer.invoke("system:install-update") as Promise<UpdateResult>,
   openExternal: (url: string) => ipcRenderer.invoke("system:open-external", url) as Promise<void>,

@@ -2,6 +2,7 @@ import type {
   CommandResult,
   DevicePort,
   DeviceRole,
+  DongleCommandPayload,
   GpsFix,
   NightGridApi,
   SerialEvent,
@@ -81,6 +82,58 @@ const result = (command: string, stdout: string): CommandResult => ({
   stdout,
   stderr: ""
 });
+
+const previewDongleResponse = (path: string, command: DongleCommandPayload): CommandResult => {
+  const label = `tdongle --port ${path} ${command.cmd}`;
+  if (command.cmd === "attachProbe" || command.cmd === "attachHello") {
+    return result(
+      label,
+      JSON.stringify({
+        type: "cyberdeck.dongle.attach",
+        protocol: "cyberdeck-link-v0",
+        name: "CyberDeck-Dongle-S3",
+        version: "preview",
+        transport: "usb-cdc",
+        apSsid: "CyberDeck-Link",
+        ip: "192.168.4.1",
+        paired: false,
+        deckId: "",
+        pairPath: "/zdeck/cyberdeck/dongle-pairing.json",
+        profilePath: "/zdeck/cyberdeck/dongle-profile.json",
+        prompt: "Pair this T-Dongle for CyberDeck remote use?"
+      }, null, 2)
+    );
+  }
+
+  if (command.cmd === "pairBegin") {
+    return result(
+      label,
+      JSON.stringify({
+        ok: true,
+        pairPending: true,
+        deckId: command.deckId ?? "itsz-tdeck",
+        deckName: command.deckName ?? "ITSZ T-Deck",
+        pairCode: "123456",
+        savePath: "/zdeck/cyberdeck/dongle-pairing.json"
+      }, null, 2)
+    );
+  }
+
+  if (command.cmd === "pairConfirm") {
+    return result(
+      label,
+      JSON.stringify({
+        ok: command.code === "123456",
+        paired: command.code === "123456",
+        deckId: command.deckId ?? "itsz-tdeck",
+        deckName: command.deckName ?? "ITSZ T-Deck",
+        savePath: "/zdeck/cyberdeck/dongle-pairing.json"
+      }, null, 2)
+    );
+  }
+
+  return result(label, JSON.stringify({ ok: true, event: command.cmd, preview: true }, null, 2));
+};
 
 export const createPreviewApi = (): NightGridApi => {
   const dataListeners = new Set<Listener<SerialEvent>>();
@@ -166,6 +219,8 @@ export const createPreviewApi = (): NightGridApi => {
       result(`meshtastic --port ${path} --nodes`, "!preview Node, last heard now, SNR 8.5\n"),
     meshSendText: async ({ path, message }: { path: string; message: string; channelIndex?: number }) =>
       result(`meshtastic --port ${path} --sendtext ${message}`, "Preview message queued\n"),
+    dongleCommand: async ({ path, command }: { path: string; command: DongleCommandPayload; timeoutMs?: number }) =>
+      previewDongleResponse(path, command),
     getPlatform: async () => ({ platform: "browser" as NodeJS.Platform, version: "preview" }),
     installUpdate: async () => ({
       ok: true,

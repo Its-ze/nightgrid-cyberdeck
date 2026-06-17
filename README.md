@@ -23,6 +23,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
+- T-Dongle wireless bridge panel for `cyberdeck-link-v0` probe, pairing, remote payloads, launcher/refresh, and text events.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - Uninstall scripts for Linux and Windows, with optional app-settings purge.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
@@ -121,8 +122,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.7
-git push origin v0.1.7
+git tag v0.1.8
+git push origin v0.1.8
 ```
 
 The release workflow uploads:

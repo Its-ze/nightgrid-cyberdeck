@@ -392,6 +392,24 @@ input:focus {
   margin-top: 10px;
 }
 
+.bridge-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bridge-send {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.solo-input {
+  margin-top: 10px;
+}
+
 .channel-input {
   text-align: center;
 }
@@ -411,6 +429,10 @@ input:focus {
   font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.bridge-output {
+  min-height: 136px;
 }
 
 .empty-state {

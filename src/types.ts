@@ -59,6 +59,11 @@ export interface CommandResult {
   stderr: string;
 }
 
+export type DongleCommandPayload = {
+  cmd: string;
+  [key: string]: string | number | boolean | undefined;
+};
+
 export interface UpdateResult {
   ok: boolean;
   platform: NodeJS.Platform;
@@ -78,6 +83,7 @@ export interface NightGridApi {
   meshInfo: (request: { path: string }) => Promise<CommandResult>;
   meshNodes: (request: { path: string }) => Promise<CommandResult>;
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) => Promise<CommandResult>;
+  dongleCommand: (request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) => Promise<CommandResult>;
   getPlatform: () => Promise<{ platform: NodeJS.Platform; version: string }>;
   installUpdate: () => Promise<UpdateResult>;
   openExternal: (url: string) => Promise<void>;
