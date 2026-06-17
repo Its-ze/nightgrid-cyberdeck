@@ -33,9 +33,15 @@ fi
 
 if [[ "${NIGHTGRID_PURGE_DATA:-0}" == "1" ]]; then
   config_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/NightGrid Cyberdeck"
+  data_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/nightgrid-cyberdeck"
   if [[ -d "${config_dir}" && "${config_dir}" == "${HOME}"/* ]]; then
     rm -rf -- "${config_dir}"
     echo "Removed ${config_dir}"
+    removed=1
+  fi
+  if [[ -d "${data_dir}" && "${data_dir}" == "${HOME}"/* ]]; then
+    rm -rf -- "${data_dir}"
+    echo "Removed ${data_dir}"
     removed=1
   fi
 fi

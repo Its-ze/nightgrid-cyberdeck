@@ -75,13 +75,20 @@ Log out and back in after changing groups. Some distros use `uucp` or `plugdev` 
 
 ## Meshtastic CLI Bridge
 
-NightGrid can run Meshtastic commands through the local Python CLI if it is installed. On Linux:
+NightGrid can run Meshtastic commands through the local Python CLI. On Linux, the NightGrid install/update script creates a managed venv at `~/.local/share/nightgrid-cyberdeck/meshtastic-venv` and installs the Meshtastic CLI there. Rerun the installer to repair or update it:
 
 ```bash
-python3 -m pip install --user meshtastic
+curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash
 ```
 
-On Windows:
+If you want to manage it manually instead:
+
+```bash
+python3 -m venv ~/.local/share/nightgrid-cyberdeck/meshtastic-venv
+~/.local/share/nightgrid-cyberdeck/meshtastic-venv/bin/python -m pip install --upgrade pip meshtastic
+```
+
+On Windows, install the CLI into your user Python:
 
 ```powershell
 py -m pip install --user meshtastic
@@ -123,8 +130,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.10
-git push origin v0.1.10
+git tag v0.1.11
+git push origin v0.1.11
 ```
 
 The release workflow uploads:

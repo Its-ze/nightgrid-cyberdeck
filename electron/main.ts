@@ -35,6 +35,11 @@ const nmeaSentencePattern = /\$(?:GP|GN|GL|GA|GB|GQ)(?:GGA|RMC|GLL|GSA|GSV|VTG),
 const now = () => new Date().toISOString();
 const appIconPath = () =>
   app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(__dirname, "../../build/icon.png");
+const nightgridDataDir = () => path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"), "nightgrid-cyberdeck");
+const meshtasticVenvPython = () =>
+  process.platform === "win32"
+    ? path.join(nightgridDataDir(), "meshtastic-venv", "Scripts", "python.exe")
+    : path.join(nightgridDataDir(), "meshtastic-venv", "bin", "python");
 
 const sendToWindows = (channel: string, payload: unknown) => {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -708,19 +713,54 @@ const registerIpc = () => {
 };
 
 const commandCandidates = () => {
+  const candidates: { command: string; baseArgs: string[] }[] = [];
+  const configuredPython = process.env.NIGHTGRID_MESHTASTIC_PYTHON;
+  if (configuredPython) candidates.push({ command: configuredPython, baseArgs: ["-m", "meshtastic"] });
+
+  const venvPython = meshtasticVenvPython();
+  if (fs.existsSync(venvPython)) candidates.push({ command: venvPython, baseArgs: ["-m", "meshtastic"] });
+
   if (process.platform === "win32") {
-    return [
+    candidates.push(
       { command: "py", baseArgs: ["-m", "meshtastic"] },
       { command: "python", baseArgs: ["-m", "meshtastic"] },
       { command: "meshtastic", baseArgs: [] }
-    ];
+    );
+    return candidates;
   }
 
-  return [
+  candidates.push(
     { command: "python3", baseArgs: ["-m", "meshtastic"] },
     { command: "python", baseArgs: ["-m", "meshtastic"] },
     { command: "meshtastic", baseArgs: [] }
-  ];
+  );
+  return candidates;
+};
+
+const meshtasticInstallHint = () => {
+  if (process.platform === "win32") {
+    return [
+      "Meshtastic CLI is not installed or is not visible to NightGrid.",
+      "Install it with: py -m pip install --user meshtastic",
+      "Then restart NightGrid."
+    ].join("\n");
+  }
+
+  const venv = path.join(nightgridDataDir(), "meshtastic-venv");
+  return [
+    "Meshtastic CLI is not installed or is not visible to NightGrid.",
+    "Run the NightGrid Linux installer again to create the managed CLI venv:",
+    "  curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash",
+    "Manual fallback:",
+    `  python3 -m venv "${venv}"`,
+    `  "${path.join(venv, "bin", "python")}" -m pip install --upgrade pip meshtastic`,
+    "Then restart NightGrid."
+  ].join("\n");
+};
+
+const isMissingMeshtastic = (result: CommandResult) => {
+  const output = `${result.stderr}\n${result.stdout}`.toLowerCase();
+  return output.includes("no module named meshtastic") || output.includes("enoent");
 };
 
 const runProcess = (command: string, args: string[], timeoutMs: number) =>
@@ -781,6 +821,7 @@ const runMeshtastic = async (args: string[], timeoutMs: number): Promise<Command
     const finalArgs = [...candidate.baseArgs, ...(args.length === 0 ? ["--version"] : args)];
     const result = await runProcess(candidate.command, finalArgs, timeoutMs);
     if (result.ok) return result;
+    if (!isMissingMeshtastic(result)) return result;
     failures.push(`${result.command}\n${result.stderr || result.stdout || "Command failed."}`);
   }
 
@@ -789,7 +830,7 @@ const runMeshtastic = async (args: string[], timeoutMs: number): Promise<Command
     command: "meshtastic probe",
     code: null,
     stdout: "",
-    stderr: failures.join("\n\n")
+    stderr: `${failures.join("\n\n")}\n\n${meshtasticInstallHint()}`
   };
 };
 

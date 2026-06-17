@@ -220,12 +220,13 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.10</span>
+            <span>NIGHTGRID 0.1.11</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
             <div><span>Updater</span><strong>Install / uninstall</strong></div>
             <div><span>App icon</span><strong>Linux / Windows</strong></div>
+            <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
             <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
             <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
@@ -237,7 +238,7 @@
       <section class="grid">
         <article class="card">
           <h2>Linux Install / Update</h2>
-          <p>Downloads the latest AppImage, marks it executable, and uses a writable per-user fallback if the current app directory is read-only.</p>
+          <p>Downloads the latest AppImage, uses a writable per-user fallback if needed, and creates a managed Meshtastic CLI venv for Mesh commands.</p>
           <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
         </article>
         <article class="card">
@@ -247,7 +248,7 @@
         </article>
         <article class="card">
           <h2>USB Notes</h2>
-          <p>On Linux, add your user to the serial group if ports cannot open. Meshtastic CLI commands need exclusive port access.</p>
+          <p>On Linux, add your user to the serial group if ports cannot open. Mesh CLI uses the NightGrid-managed Meshtastic venv.</p>
           <code>sudo usermod -aG dialout "$USER"</code>
         </article>
         <article class="card">

@@ -1,6 +1,6 @@
 {
   "name": "nightgrid-cyberdeck",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "NightGrid Cyberdeck is a dark cross-platform USB field deck for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles.",
   "author": {
     "name": "Its-ze",

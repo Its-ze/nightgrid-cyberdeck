@@ -6,6 +6,7 @@ asset="NightGrid-Cyberdeck-Linux-x64.AppImage"
 url="https://github.com/${repo}/releases/latest/download/${asset}"
 primary_install_dir="${NIGHTGRID_INSTALL_DIR:-${XDG_BIN_HOME:-${HOME}/Applications}}"
 fallback_install_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/nightgrid-cyberdeck"
+meshtastic_venv="${fallback_install_dir}/meshtastic-venv"
 existing=0
 
 can_write_dir() {
@@ -63,6 +64,39 @@ Categories=Utility;Development;
 EOF
 
 update-desktop-database "${desktop_dir}" >/dev/null 2>&1 || true
+
+setup_meshtastic_cli() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "Python 3 was not found. Skipping Meshtastic CLI setup."
+    echo "Install python3 and python3-venv, then rerun this installer to enable Mesh CLI commands."
+    return 0
+  fi
+
+  echo "Setting up Meshtastic CLI in ${meshtastic_venv}"
+  mkdir -p "$(dirname "${meshtastic_venv}")"
+  if ! python3 -m venv "${meshtastic_venv}" >/dev/null 2>&1; then
+    echo "Could not create Python venv for Meshtastic CLI."
+    echo "Install your distro's venv package, then rerun this installer:"
+    echo "  Debian/Ubuntu/Pop!_OS: sudo apt install python3-venv"
+    echo "  Fedora: sudo dnf install python3"
+    echo "  openSUSE: sudo zypper install python3 python3-pip"
+    return 0
+  fi
+
+  if ! "${meshtastic_venv}/bin/python" -m pip install --upgrade pip meshtastic; then
+    echo "Could not install Meshtastic CLI into ${meshtastic_venv}."
+    echo "NightGrid was still installed. Rerun this installer after Python/pip networking is fixed."
+    return 0
+  fi
+  echo "Meshtastic CLI ready at ${meshtastic_venv}/bin/python -m meshtastic"
+}
+
+if [[ "${NIGHTGRID_SKIP_MESHTASTIC_SETUP:-0}" != "1" ]]; then
+  setup_meshtastic_cli
+else
+  echo "Skipped Meshtastic CLI setup because NIGHTGRID_SKIP_MESHTASTIC_SETUP=1"
+fi
+
 if [[ "${existing}" == "1" ]]; then
   echo "Updated NightGrid Cyberdeck at ${target}"
 else
@@ -71,3 +105,5 @@ fi
 echo "Run this installer again any time to update the existing AppImage."
 echo "If USB serial ports fail to open, add your user to the dialout group and log in again:"
 echo "  sudo usermod -aG dialout \"\$USER\""
+echo "NightGrid Mesh CLI uses the managed Meshtastic venv at:"
+echo "  ${meshtastic_venv}/bin/python -m meshtastic"
