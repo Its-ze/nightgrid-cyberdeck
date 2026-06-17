@@ -7,7 +7,9 @@ import type {
   NightGridApi,
   SerialEvent,
   SerialSession,
-  SerialStatusEvent
+  SerialStatusEvent,
+  WarDriveRecord,
+  WarDriveSaveResult
 } from "./types";
 
 type Listener<T> = (event: T) => void;
@@ -20,7 +22,7 @@ const previewPorts: DevicePort[] = [
     vendorId: "10C4",
     productId: "EA60",
     suggestedRole: "heltec",
-    tags: ["ESP32", "Heltec/Mesh", "CP210x"],
+    tags: ["ESP32", "Heltec V3", "Meshtastic", "LoRa", "CP210x"],
     isKnownBoard: true
   },
   {
@@ -258,9 +260,25 @@ export const createPreviewApi = (): NightGridApi => {
     meshInfo: async ({ path }: { path: string }) =>
       result(`meshtastic --port ${path} --info`, "Preview mesh radio\nhardware: Heltec V3 or T-Deck / ESP32-S3\nfirmware: meshtastic\nrole: CLIENT\n"),
     meshNodes: async ({ path }: { path: string }) =>
-      result(`meshtastic --port ${path} --nodes`, "!preview Node, last heard now, SNR 8.5\n"),
+      result(
+        `meshtastic --port ${path} --nodes`,
+        [
+          "Nodes in mesh:",
+          "| User ID | Long Name | Short Name | Last Heard | SNR |",
+          "| !a1b2c3d4 | Ridge Relay | RIDGE | now | 8.5 |",
+          "| !f00dbabe | Trail Deck | TRAIL | 22s | 5.1 |"
+        ].join("\n")
+      ),
     meshSendText: async ({ path, message }: { path: string; message: string; channelIndex?: number }) =>
       result(`meshtastic --port ${path} --sendtext ${message}`, "Preview message queued\n"),
+    saveWarDriveLog: async ({ records }: { records: WarDriveRecord[] }): Promise<WarDriveSaveResult> => ({
+      ok: true,
+      count: records.length,
+      directory: "/tmp/nightgrid-cyberdeck/war-drive-preview",
+      jsonlPath: "/tmp/nightgrid-cyberdeck/war-drive-preview/nightgrid-war-drive-preview.jsonl",
+      csvPath: "/tmp/nightgrid-cyberdeck/war-drive-preview/nightgrid-war-drive-preview.csv",
+      message: `Preview saved ${records.length} War Drive record${records.length === 1 ? "" : "s"}.`
+    }),
     probeGps: async ({ path, baudRates }: { path: string; baudRates?: number[]; timeoutMs?: number }) =>
       result(
         `gps-probe --port ${path} --baud ${(baudRates?.length ? baudRates : [9600, 38400, 4800]).join(",")}`,

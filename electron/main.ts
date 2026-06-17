@@ -15,7 +15,9 @@ import type {
   SerialEvent,
   SerialSession,
   SerialStatusEvent,
-  UpdateResult
+  UpdateResult,
+  WarDriveRecord,
+  WarDriveSaveResult
 } from "../src/types";
 
 type ListedPort = Awaited<ReturnType<typeof SerialPort.list>>[number];
@@ -120,7 +122,23 @@ const classifyPort = (port: ListedPort): DevicePort => {
   const isEsp32S3UsbJtag = vendorId === "303A" && productId === "1001";
   const isTDeck = hasAny(haystack, ["t-deck", "tdeck", "lilygo t-deck"]);
   const isTDongle = hasAny(haystack, ["t-dongle", "tdongle", "t dongle", "lilygo esp32-s3 dongle"]);
-  const isHeltec = haystack.includes("heltec");
+  const isHeltecV3Name = hasAny(haystack, [
+    "heltec",
+    "wireless stick",
+    "wireless tracker",
+    "wifi lora 32",
+    "wifi kit 32",
+    "htit",
+    "heltec v3",
+    "lora v3",
+    "sx1262"
+  ]);
+  const isHeltecV3UsbCandidate =
+    vendorId === "10C4" &&
+    productId === "EA60" &&
+    hasAny(haystack, ["cp210", "silicon labs"]) &&
+    !hasAny(haystack, ["devkit", "wled", "tasmota"]);
+  const isHeltec = isHeltecV3Name || isHeltecV3UsbCandidate;
   const isFlipper = haystack.includes("flipper") || (vendorId === "0483" && productId === "5740");
   const isGenericEsp32 =
     hasAny(haystack, ["esp32", "espressif", "usb-serial/jtag", "cp210", "ch340"]) ||
@@ -140,7 +158,8 @@ const classifyPort = (port: ListedPort): DevicePort => {
     tags.push("Flipper Zero", "CLI");
     suggestedRole = "flipper";
   } else if (isHeltec) {
-    tags.push("ESP32", "Heltec/Mesh");
+    tags.push("ESP32", "Heltec V3", "Meshtastic", "LoRa");
+    if (isHeltecV3UsbCandidate && !isHeltecV3Name) tags.push("CP210x candidate");
     suggestedRole = "heltec";
   } else if (isGenericEsp32) {
     tags.push("ESP32", "USB serial");
@@ -810,6 +829,8 @@ const registerIpc = () => {
     return runMeshtastic(args, 45000);
   });
 
+  ipcMain.handle("war-drive:save", async (_, request: { records: WarDriveRecord[] }) => saveWarDriveLog(request.records));
+
   ipcMain.handle("gps:probe", async (_, request: { path: string; baudRates?: number[]; timeoutMs?: number }) => {
     if (!request?.path) throw new Error("GPS serial port is required.");
     const baudRates = (request.baudRates?.length ? request.baudRates : gpsProbeBaudRates)
@@ -961,6 +982,88 @@ const runMeshtastic = async (args: string[], timeoutMs: number): Promise<Command
     code: null,
     stdout: "",
     stderr: `${failures.join("\n\n")}\n\n${meshtasticInstallHint()}`
+  };
+};
+
+const csvCell = (value: unknown) => {
+  if (value === undefined || value === null) return "";
+  const text = String(value).replace(/\r?\n/g, " ");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+const safeWarDriveRecord = (record: WarDriveRecord): WarDriveRecord => ({
+  id: String(record.id || `${Date.now()}`),
+  seenAt: String(record.seenAt || now()),
+  nodeId: String(record.nodeId || "unknown"),
+  nodeName: record.nodeName ? String(record.nodeName).slice(0, 160) : undefined,
+  meshPath: String(record.meshPath || ""),
+  raw: String(record.raw || "").slice(0, 1200),
+  gpsPath: record.gpsPath ? String(record.gpsPath) : undefined,
+  lat: typeof record.lat === "number" && Number.isFinite(record.lat) ? record.lat : undefined,
+  lon: typeof record.lon === "number" && Number.isFinite(record.lon) ? record.lon : undefined,
+  altitudeMeters:
+    typeof record.altitudeMeters === "number" && Number.isFinite(record.altitudeMeters) ? record.altitudeMeters : undefined,
+  satellites: typeof record.satellites === "number" && Number.isFinite(record.satellites) ? record.satellites : undefined,
+  gpsStatus: String(record.gpsStatus || "No GPS"),
+  gpsFixAgeMs: typeof record.gpsFixAgeMs === "number" && Number.isFinite(record.gpsFixAgeMs) ? record.gpsFixAgeMs : undefined,
+  cliCommand: record.cliCommand ? String(record.cliCommand).slice(0, 260) : undefined
+});
+
+const saveWarDriveLog = async (records: WarDriveRecord[]): Promise<WarDriveSaveResult> => {
+  const safeRecords = (Array.isArray(records) ? records : []).slice(-5000).map(safeWarDriveRecord);
+  const directory = path.join(nightgridDataDir(), "war-drive");
+  await fsp.mkdir(directory, { recursive: true });
+
+  const stamp = now().replace(/[:.]/g, "-");
+  const jsonlPath = path.join(directory, `nightgrid-war-drive-${stamp}.jsonl`);
+  const csvPath = path.join(directory, `nightgrid-war-drive-${stamp}.csv`);
+  const jsonl = `${safeRecords.map((record) => JSON.stringify(record)).join("\n")}${safeRecords.length ? "\n" : ""}`;
+  const header = [
+    "id",
+    "seenAt",
+    "nodeId",
+    "nodeName",
+    "meshPath",
+    "lat",
+    "lon",
+    "altitudeMeters",
+    "satellites",
+    "gpsStatus",
+    "gpsFixAgeMs",
+    "gpsPath",
+    "cliCommand",
+    "raw"
+  ];
+  const rows = safeRecords.map((record) =>
+    [
+      record.id,
+      record.seenAt,
+      record.nodeId,
+      record.nodeName,
+      record.meshPath,
+      record.lat,
+      record.lon,
+      record.altitudeMeters,
+      record.satellites,
+      record.gpsStatus,
+      record.gpsFixAgeMs,
+      record.gpsPath,
+      record.cliCommand,
+      record.raw
+    ]
+      .map(csvCell)
+      .join(",")
+  );
+
+  await Promise.all([fsp.writeFile(jsonlPath, jsonl, "utf8"), fsp.writeFile(csvPath, `${header.join(",")}\n${rows.join("\n")}\n`, "utf8")]);
+
+  return {
+    ok: true,
+    count: safeRecords.length,
+    directory,
+    jsonlPath,
+    csvPath,
+    message: `Saved ${safeRecords.length} War Drive record${safeRecords.length === 1 ? "" : "s"} to ${directory}`
   };
 };
 

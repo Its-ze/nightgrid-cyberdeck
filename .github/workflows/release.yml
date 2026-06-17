@@ -29,6 +29,9 @@ jobs:
       - run: npm ci --no-audit --fund=false --prefer-online
         timeout-minutes: 12
       - run: npm run rebuild:native
+      - name: Prepare Linux package hooks
+        if: runner.os == 'Linux'
+        run: chmod +x build/linux-deb-after-install.sh build/linux-deb-after-remove.sh
       - name: Build Linux installers
         if: runner.os == 'Linux'
         run: npm run dist:linux

@@ -59,6 +59,32 @@ export interface CommandResult {
   stderr: string;
 }
 
+export interface WarDriveRecord {
+  id: string;
+  seenAt: string;
+  nodeId: string;
+  nodeName?: string;
+  meshPath: string;
+  raw: string;
+  gpsPath?: string;
+  lat?: number;
+  lon?: number;
+  altitudeMeters?: number;
+  satellites?: number;
+  gpsStatus: string;
+  gpsFixAgeMs?: number;
+  cliCommand?: string;
+}
+
+export interface WarDriveSaveResult {
+  ok: boolean;
+  count: number;
+  directory: string;
+  jsonlPath: string;
+  csvPath: string;
+  message: string;
+}
+
 export type DongleCommandPayload = {
   cmd: string;
   [key: string]: string | number | boolean | undefined;
@@ -85,6 +111,7 @@ export interface NightGridApi {
   meshInfo: (request: { path: string }) => Promise<CommandResult>;
   meshNodes: (request: { path: string }) => Promise<CommandResult>;
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) => Promise<CommandResult>;
+  saveWarDriveLog: (request: { records: WarDriveRecord[] }) => Promise<WarDriveSaveResult>;
   probeGps: (request: { path: string; baudRates?: number[]; timeoutMs?: number }) => Promise<CommandResult>;
   dongleCommand: (request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) => Promise<CommandResult>;
   getPlatform: () => Promise<{ platform: NodeJS.Platform; version: string }>;

@@ -32,7 +32,8 @@ import type {
   GpsFix,
   SerialEvent,
   SerialSession,
-  SerialStatusEvent
+  SerialStatusEvent,
+  WarDriveRecord
 } from "./types";
 
 interface LogEntry {
@@ -42,6 +43,12 @@ interface LogEntry {
   path?: string;
   role?: DeviceRole;
   text: string;
+}
+
+interface ParsedMeshNode {
+  nodeId: string;
+  nodeName?: string;
+  raw: string;
 }
 
 type LogFilter = "all" | "rx" | "tx" | "status";
@@ -94,6 +101,7 @@ interface MarketplacePack {
 const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 const gpsFreshMs = 6000;
 const gpsCacheTtlMs = 120000;
+const warDriveRepeatMs = 60000;
 const zDeckFlasherUrl = "https://its-ze.github.io/Z-Deck-Web-Flasher/";
 const zDeckReleaseUrl = "https://github.com/Its-ze/Z-Deck-Web-Flasher/releases/latest";
 const esp32RemoteProtocol = "nightgrid-esp32-remote-v0";
@@ -490,7 +498,7 @@ const sideTabs: Array<{ value: SideTab; label: string; detail: string; icon: typ
 ];
 
 const roleLabels: Record<DeviceRole, string> = {
-  heltec: "Heltec mesh",
+  heltec: "Heltec V3 mesh",
   tdeck: "T-Deck / ESP32-S3 mesh",
   tdongle: "T-Dongle console",
   esp32: "ESP32 module",
@@ -616,6 +624,81 @@ const formatCommandResult = (result: CommandResult) => {
   return parts.join("\n\n");
 };
 
+const simpleHash = (value: string) => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+};
+
+const isMeshNodeLine = (line: string) => {
+  if (!line || line.startsWith("$")) return false;
+  if (/^(stderr:|exit:|nodes in mesh|user id|node list|connected|disconnected|warning|error)/i.test(line)) return false;
+  if (/^[+|\-\s]+$/.test(line)) return false;
+  return /![0-9a-f]{4,16}\b/i.test(line) || /\b[0-9a-f]{8}\b/i.test(line);
+};
+
+const parseMeshNodeOutput = (output: string): ParsedMeshNode[] => {
+  const seen = new Set<string>();
+  const nodes: ParsedMeshNode[] = [];
+
+  for (const rawLine of output.split(/\r?\n/)) {
+    const raw = rawLine.trim();
+    if (!isMeshNodeLine(raw)) continue;
+    const cells = raw
+      .split("|")
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+    const searchLine = cells.length > 1 ? cells.join(" ") : raw;
+    const idMatch = searchLine.match(/![0-9a-f]{4,16}\b/i) ?? searchLine.match(/\b[0-9a-f]{8}\b/i);
+    const nodeId = idMatch?.[0] ?? `line-${simpleHash(raw)}`;
+    if (seen.has(nodeId)) continue;
+
+    const idCellIndex = cells.findIndex((cell) => cell.includes(nodeId));
+    const cellName =
+      idCellIndex >= 0
+        ? cells.find((cell, index) => index !== idCellIndex && !/^(last heard|snr|hops?|channel|role|hw|firmware)$/i.test(cell))
+        : undefined;
+    const roughName = raw
+      .replace(nodeId, "")
+      .replace(/[|,;]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const nodeName = (cellName ?? roughName).slice(0, 80) || undefined;
+    seen.add(nodeId);
+    nodes.push({ nodeId, nodeName, raw });
+  }
+
+  return nodes;
+};
+
+const csvCell = (value: unknown) => {
+  if (value === undefined || value === null) return "";
+  const text = String(value).replace(/\r?\n/g, " ");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+const warDriveCsv = (records: WarDriveRecord[]) => {
+  const header = ["seenAt", "nodeId", "nodeName", "lat", "lon", "gpsStatus", "meshPath", "raw"];
+  const rows = records.map((record) =>
+    [
+      record.seenAt,
+      record.nodeId,
+      record.nodeName,
+      record.lat,
+      record.lon,
+      record.gpsStatus,
+      record.meshPath,
+      record.raw
+    ]
+      .map(csvCell)
+      .join(",")
+  );
+  return `${header.join(",")}\n${rows.join("\n")}`;
+};
+
 export function App() {
   const api = useMemo(() => window.nightgrid ?? createPreviewApi(), []);
   const [ports, setPorts] = useState<DevicePort[]>([]);
@@ -642,6 +725,11 @@ export function App() {
   const [meshMessage, setMeshMessage] = useState("");
   const [meshChannel, setMeshChannel] = useState("0");
   const [meshPath, setMeshPath] = useState("");
+  const [warDriveActive, setWarDriveActive] = useState(false);
+  const [warDriveInterval, setWarDriveInterval] = useState("20");
+  const [warDriveSaving, setWarDriveSaving] = useState(false);
+  const [warDriveRecords, setWarDriveRecords] = useState<WarDriveRecord[]>([]);
+  const [warDriveOutput, setWarDriveOutput] = useState("War Drive mode is idle. Select a Heltec V3 mesh port and connect your GPS module.");
   const [donglePath, setDonglePath] = useState("");
   const [dongleBusy, setDongleBusy] = useState(false);
   const [dongleOutput, setDongleOutput] = useState("T-Dongle bridge output will appear here.");
@@ -678,6 +766,11 @@ export function App() {
   const logRef = useRef<HTMLDivElement>(null);
   const lastGpsPushAt = useRef(0);
   const lastGpsPushedFixAt = useRef<number | null>(null);
+  const gpsFixRef = useRef<GpsFix | null>(null);
+  const gpsLastFixAtRef = useRef<number | null>(null);
+  const warDriveBusyRef = useRef(false);
+  const warDriveRecordsRef = useRef<WarDriveRecord[]>([]);
+  const warDriveSeenRef = useRef(new Map<string, { seenAtMs: number; coordKey: string }>());
   const sessionsRef = useRef<SerialSession[]>([]);
   const roleByPathRef = useRef<Record<string, DeviceRole>>({});
   const baudByPathRef = useRef<Record<string, number>>({});
@@ -701,6 +794,8 @@ export function App() {
   const gpsFixAgeMs = gpsLastFixAt === null ? null : Math.max(0, gpsNow - gpsLastFixAt);
   const gpsCanPush = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
   const gpsStatus = formatGpsStatus(gpsFix, gpsFixAgeMs);
+  const latestWarDriveRecord = warDriveRecords[warDriveRecords.length - 1];
+  const warDriveIntervalSeconds = Math.min(Math.max(Number(warDriveInterval) || 20, 10), 300);
   const knownPortCount = ports.filter((port) => port.isKnownBoard).length;
   const logStats = useMemo(
     () => ({
@@ -1008,6 +1103,170 @@ export function App() {
         channelIndex: Number.isFinite(channelIndex) ? channelIndex : undefined
       })
     );
+  };
+
+  const appendWarDriveRecords = (records: WarDriveRecord[]) => {
+    if (records.length === 0) return;
+    setWarDriveRecords((current) => {
+      const next = [...current, ...records].slice(-1500);
+      warDriveRecordsRef.current = next;
+      return next;
+    });
+  };
+
+  const recordWarDriveNodes = async (reason = "poll") => {
+    const targetPath = meshPathRef.current || meshPorts[0]?.path;
+    if (!targetPath) {
+      setWarDriveOutput("Select or plug in a Heltec V3 / Meshtastic serial port first.");
+      return;
+    }
+    if (sessionsRef.current.some((session) => session.path === targetPath)) {
+      setWarDriveOutput(`Disconnect the live serial session on ${targetPath} before War Drive polling. Meshtastic CLI needs exclusive port access.`);
+      return;
+    }
+    if (warDriveBusyRef.current) return;
+
+    if (targetPath !== meshPathRef.current) {
+      setMeshPath(targetPath);
+      meshPathRef.current = targetPath;
+    }
+
+    warDriveBusyRef.current = true;
+    try {
+      const result = await api.meshNodes({ path: targetPath });
+      if (!result.ok) {
+        setWarDriveOutput(formatCommandResult(result));
+        addLog({
+          channel: "status",
+          at: new Date().toISOString(),
+          path: targetPath,
+          role: "heltec",
+          text: "War Drive mesh node poll failed."
+        });
+        return;
+      }
+
+      const nodes = parseMeshNodeOutput(`${result.stdout}\n${result.stderr}`);
+      const fix = gpsFixRef.current;
+      const ageMs = gpsLastFixAtRef.current === null ? null : Math.max(0, Date.now() - gpsLastFixAtRef.current);
+      const hasFreshCachedGps = Boolean(fix && hasGpsCoordinates(fix) && ageMs !== null && ageMs <= gpsCacheTtlMs);
+      const coordKey = hasFreshCachedGps && fix ? `${fix.lat?.toFixed(4)},${fix.lon?.toFixed(4)}` : "no-gps";
+      const status = formatGpsStatus(fix, ageMs);
+      const seenAtMs = Date.now();
+      const seenAt = new Date(seenAtMs).toISOString();
+      const newRecords: WarDriveRecord[] = [];
+
+      for (const node of nodes) {
+        const lastSeen = warDriveSeenRef.current.get(node.nodeId);
+        if (lastSeen && lastSeen.coordKey === coordKey && seenAtMs - lastSeen.seenAtMs < warDriveRepeatMs) continue;
+        warDriveSeenRef.current.set(node.nodeId, { seenAtMs, coordKey });
+        newRecords.push({
+          id: `${seenAtMs}-${simpleHash(`${node.nodeId}:${coordKey}:${node.raw}`)}`,
+          seenAt,
+          nodeId: node.nodeId,
+          nodeName: node.nodeName,
+          meshPath: targetPath,
+          raw: node.raw,
+          gpsPath: fix?.path ?? gpsPathRef.current,
+          lat: hasFreshCachedGps ? fix?.lat : undefined,
+          lon: hasFreshCachedGps ? fix?.lon : undefined,
+          altitudeMeters: hasFreshCachedGps ? fix?.altitudeMeters : undefined,
+          satellites: hasFreshCachedGps ? fix?.satellites : undefined,
+          gpsStatus: status,
+          gpsFixAgeMs: ageMs ?? undefined,
+          cliCommand: result.command
+        });
+      }
+
+      appendWarDriveRecords(newRecords);
+      const gpsLine = hasFreshCachedGps && fix ? `${fix.lat?.toFixed(6)}, ${fix.lon?.toFixed(6)} (${status})` : status;
+      setWarDriveOutput(
+        [
+          `${reason === "manual" ? "Manual mark" : "War Drive poll"}: ${nodes.length} node${nodes.length === 1 ? "" : "s"} parsed from ${targetPath}.`,
+          `${newRecords.length} new sighting${newRecords.length === 1 ? "" : "s"} recorded.`,
+          `GPS: ${gpsLine}`,
+          nodes.length === 0 ? "No Meshtastic node IDs were found in CLI output." : "",
+          newRecords
+            .slice(-6)
+            .map((record) => `${formatTime(record.seenAt)} ${record.nodeId} ${record.nodeName ?? ""} ${record.lat ?? "no-lat"},${record.lon ?? "no-lon"}`)
+            .join("\n")
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "War Drive poll failed.";
+      setWarDriveOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: targetPath,
+        role: "heltec",
+        text: message
+      });
+    } finally {
+      warDriveBusyRef.current = false;
+    }
+  };
+
+  const startWarDrive = () => {
+    if (!meshPathRef.current && !meshPorts[0]?.path) {
+      setWarDriveOutput("Plug in a Heltec V3 / Meshtastic serial port and scan before starting War Drive mode.");
+      return;
+    }
+    setWarDriveActive(true);
+    setWarDriveOutput(`War Drive armed. Polling every ${warDriveIntervalSeconds}s.`);
+    void recordWarDriveNodes("manual");
+  };
+
+  const stopWarDrive = () => {
+    setWarDriveActive(false);
+    setWarDriveOutput(`War Drive stopped with ${warDriveRecordsRef.current.length} recorded sighting${warDriveRecordsRef.current.length === 1 ? "" : "s"}.`);
+  };
+
+  const saveWarDriveRecords = async () => {
+    const records = warDriveRecordsRef.current;
+    if (records.length === 0) {
+      setWarDriveOutput("No War Drive records to save yet.");
+      return;
+    }
+    setWarDriveSaving(true);
+    try {
+      const result = await api.saveWarDriveLog({ records });
+      setWarDriveOutput([result.message, result.jsonlPath, result.csvPath].join("\n"));
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: meshPathRef.current || undefined,
+        role: "heltec",
+        text: result.message
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "War Drive save failed.";
+      setWarDriveOutput(message);
+    } finally {
+      setWarDriveSaving(false);
+    }
+  };
+
+  const copyWarDriveRecords = async () => {
+    if (warDriveRecordsRef.current.length === 0) {
+      setWarDriveOutput("No War Drive records to copy yet.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(warDriveCsv(warDriveRecordsRef.current));
+      setWarDriveOutput(`Copied ${warDriveRecordsRef.current.length} War Drive record${warDriveRecordsRef.current.length === 1 ? "" : "s"} as CSV.`);
+    } catch (error) {
+      setWarDriveOutput(error instanceof Error ? error.message : "Copy War Drive CSV failed.");
+    }
+  };
+
+  const clearWarDriveRecords = () => {
+    warDriveSeenRef.current.clear();
+    warDriveRecordsRef.current = [];
+    setWarDriveRecords([]);
+    setWarDriveOutput("War Drive records cleared.");
   };
 
   const probeGps = async () => {
@@ -1588,6 +1847,18 @@ export function App() {
   }, [baudByPath]);
 
   useEffect(() => {
+    gpsFixRef.current = gpsFix;
+  }, [gpsFix]);
+
+  useEffect(() => {
+    gpsLastFixAtRef.current = gpsLastFixAt;
+  }, [gpsLastFixAt]);
+
+  useEffect(() => {
+    warDriveRecordsRef.current = warDriveRecords;
+  }, [warDriveRecords]);
+
+  useEffect(() => {
     meshPathRef.current = meshPath;
   }, [meshPath]);
 
@@ -1751,6 +2022,14 @@ export function App() {
     void pushGpsFix(gpsFix);
   }, [gpsAutoPush, gpsFix, gpsCanPush, gpsLastFixAt, donglePath, gpsPushBusy]);
 
+  useEffect(() => {
+    if (!warDriveActive) return;
+    const timer = window.setInterval(() => {
+      void recordWarDriveNodes("poll");
+    }, warDriveIntervalSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [warDriveActive, warDriveIntervalSeconds]);
+
   const macroButtons = [
     {
       label: "Selected help",
@@ -1771,6 +2050,15 @@ export function App() {
       action: () =>
         runDeckMacro("Mesh nodes", async () => {
           await runMeshCommand(() => api.meshNodes({ path: meshPath }));
+        })
+    },
+    {
+      label: "War mark",
+      icon: Crosshair,
+      disabled: !meshPath || warDriveBusyRef.current,
+      action: () =>
+        runDeckMacro("War mark", async () => {
+          await recordWarDriveNodes("manual");
         })
     },
     {
@@ -2343,10 +2631,79 @@ export function App() {
             <pre className="mesh-output gps-output">{gpsProbeOutput}</pre>
           </section>
 
+          <section className={`panel war-drive-panel ${warDriveActive ? "active" : ""}`}>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Heltec V3</p>
+                <h2>War Drive</h2>
+              </div>
+              <Crosshair size={22} />
+            </div>
+            <div className="gps-grid war-drive-grid">
+              <Metric label="Mode" value={warDriveActive ? "Recording" : "Idle"} />
+              <Metric label="Sightings" value={warDriveRecords.length.toString()} />
+              <Metric label="Last node" value={latestWarDriveRecord?.nodeId ?? "None"} />
+              <Metric
+                label="Last fix"
+                value={
+                  latestWarDriveRecord?.lat !== undefined && latestWarDriveRecord.lon !== undefined
+                    ? `${latestWarDriveRecord.lat.toFixed(5)}, ${latestWarDriveRecord.lon.toFixed(5)}`
+                    : gpsStatus
+                }
+              />
+            </div>
+            <div className="war-drive-controls">
+              <label>
+                Heltec / mesh port
+                <select value={meshPath} onChange={(event) => setMeshPath(event.target.value)}>
+                  <option value="">Select port</option>
+                  {(meshPorts.length ? meshPorts : ports).map((port) => (
+                    <option value={port.path} key={port.path}>
+                      {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Poll seconds
+                <input
+                  value={warDriveInterval}
+                  inputMode="numeric"
+                  onChange={(event) => setWarDriveInterval(event.target.value)}
+                  aria-label="War Drive poll interval seconds"
+                />
+              </label>
+            </div>
+            <div className="button-grid">
+              <button className="icon-button primary" disabled={!meshPath && !meshPorts[0]?.path} onClick={warDriveActive ? stopWarDrive : startWarDrive}>
+                <Power size={15} />
+                {warDriveActive ? "Stop" : "Start"}
+              </button>
+              <button className="icon-button" disabled={!meshPath && !meshPorts[0]?.path} onClick={() => recordWarDriveNodes("manual")}>
+                <Crosshair size={15} />
+                Mark now
+              </button>
+              <button className="icon-button" disabled={warDriveSaving || warDriveRecords.length === 0} onClick={saveWarDriveRecords}>
+                <Download size={15} />
+                Save log
+              </button>
+              <button className="icon-button" disabled={warDriveRecords.length === 0} onClick={copyWarDriveRecords}>
+                <Clipboard size={15} />
+                Copy CSV
+              </button>
+              <button className="icon-button danger" disabled={warDriveRecords.length === 0} onClick={clearWarDriveRecords}>
+                <Trash2 size={15} />
+                Clear
+              </button>
+              <span className="status-pill war-drive-pill">{gpsCanPush ? "GPS cached" : "GPS optional"}</span>
+            </div>
+            <pre className="mesh-output war-drive-output">{warDriveOutput}</pre>
+          </section>
+
           <section className="panel">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">Heltec / T-Deck</p>
+                <p className="eyebrow">Heltec V3 / T-Deck</p>
                 <h2>Mesh CLI</h2>
               </div>
               <Radio size={22} />

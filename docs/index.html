@@ -208,11 +208,13 @@
           <h1>NightGrid Cyberdeck</h1>
           <p class="lede">
             A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle bridge boards,
-            ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output, push a GPS fix through
-            the T-Dongle bridge, run Flipper and Pico quick commands, open curated marketplace packs, and bridge into Meshtastic from one local app.
+            ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output,
+            record Heltec V3 War Drive node sightings with GPS stamps, push a GPS fix through the T-Dongle bridge,
+            run Flipper and Pico quick commands, open curated marketplace packs, and bridge into Meshtastic from one local app.
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.AppImage">Download Linux AppImage</a>
+            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.deb">Download Linux deb</a>
             <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Windows-x64-Setup.exe">Download Windows Setup</a>
             <a class="button" href="install-linux.sh">Linux Update Script</a>
             <a class="button" href="uninstall-linux.sh">Linux Uninstall Script</a>
@@ -222,7 +224,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.20</span>
+            <span>NIGHTGRID 0.1.21</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -232,6 +234,8 @@
             <div><span>Command Deck</span><strong>Macros / log tools</strong></div>
             <div><span>Marketplace</span><strong>Tabbed packs</strong></div>
             <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
+            <div><span>Heltec V3</span><strong>War Drive</strong></div>
+            <div><span>War logs</span><strong>JSONL / CSV</strong></div>
             <div><span>ESP32 module</span><strong>Auto connect</strong></div>
             <div><span>ESP32 Remote</span><strong>REPL / JSON Link</strong></div>
             <div><span>Flasher</span><strong>T-Deck / ESP32-S3</strong></div>
@@ -240,6 +244,7 @@
             <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
             <div><span>GPS NMEA</span><strong>Cached fix</strong></div>
+            <div><span>Linux deb</span><strong>Lid stays awake</strong></div>
           </div>
         </section>
       </header>
@@ -259,6 +264,16 @@
           <h2>USB Notes</h2>
           <p>On Linux, add your user to the serial group if ports cannot open. Meshtastic firmware logs are line-buffered and stripped of ANSI color codes.</p>
           <code>sudo usermod -aG dialout "$USER"</code>
+        </article>
+        <article class="card">
+          <h2>Heltec V3 War Drive</h2>
+          <p>Polls the selected Heltec V3 or Meshtastic serial port for known nodes, stamps sightings with cached USB GPS fixes, and saves local JSONL/CSV logs.</p>
+          <code>Start / Mark now / Save log / Copy CSV</code>
+        </article>
+        <article class="card">
+          <h2>Linux Deb Lid Mode</h2>
+          <p>The deb package installs a NightGrid-owned systemd-logind drop-in so your mobile deck keeps running with the laptop lid closed, then removes it on package removal.</p>
+          <code>/etc/systemd/logind.conf.d/nightgrid-cyberdeck-lid.conf</code>
         </article>
         <article class="card">
           <h2>Command Deck</h2>
@@ -312,7 +327,7 @@
         </article>
       </section>
       <footer>
-        NightGrid runs locally. Serial traffic, mesh output, and GPS coordinates stay on your machine unless you copy, send, or push them.
+        NightGrid runs locally. Serial traffic, mesh output, War Drive logs, and GPS coordinates stay on your machine unless you copy, send, save, or push them.
       </footer>
     </main>
   </body>

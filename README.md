@@ -17,7 +17,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 
 ## Features
 
-- Serial port scanner with Heltec, T-Deck, T-Dongle, ESP32, Flipper Zero, Pico, GPS, CP210x, and CH340 hints.
+- Serial port scanner with Heltec V3, T-Deck, T-Dongle, ESP32, Flipper Zero, Pico, GPS, CP210x, CH340, and Heltec CP210x candidate hints.
 - Role-based connect presets for Heltec/T-Deck mesh, T-Dongle serial, ESP32 modules, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Command Deck macro launcher for selected-device help/status, mesh nodes, GPS push, T-Dongle status, deck-ready payload, ESP32 ping, and memory checks.
 - Tabbed Marketplace packs for T-Deck, T-Dongle, ESP32, ESP32-S3, WLED, ESPHome, MicroPython, CircuitPython, ESP-IDF, Arduino-ESP32, Tasmota, ESP-NOW, RainMaker, LVGL, Matter, and Meshtastic workflows.
@@ -25,6 +25,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Serial console log filters for RX/TX/status plus copy and clear controls.
 - Live serial console with RX/TX/status lanes, line reassembly, and ANSI cleanup for Meshtastic firmware logs.
 - GPS fix panel for GGA/RMC NMEA sentences, active baud probing, cached fix display, and manual/auto push to the T-Dongle bridge.
+- Heltec V3 War Drive mode for passive Meshtastic node sightings with GPS-stamped local JSONL/CSV logs.
 - ESP32 module panel with automatic connect, reset, bootloader, Ctrl-C/Ctrl-D, `help()`, file listing, and remote-control actions.
 - ESP32 Remote controls for host link, identify, heartbeat, Wi-Fi scan, I2C scan, GPIO write, and custom command send over MicroPython REPL or newline JSON Link.
 - Flasher panel for T-Deck, ESP32-S3, ESP32, and T-Dongle serial boards with web flasher, latest firmware, connect, reset, and bootloader actions.
@@ -36,6 +37,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Packaged NightGrid app icon for Linux AppImage/deb, Linux launchers, Windows setup, the app window, and browser/installer preview.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - Uninstall scripts for Linux and Windows, with optional app-settings purge.
+- Debian package install hook that keeps Debian/Ubuntu/Pop!_OS laptops awake when the lid is closed, and removes that policy on package removal.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
 
 ## Install / Update
@@ -57,6 +59,8 @@ irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex
 ```
 
 The Linux script replaces the existing `NightGrid-Cyberdeck.AppImage` in place when that directory is writable. If the current AppImage location is read-only, the installer falls back to `~/.local/share/nightgrid-cyberdeck/NightGrid-Cyberdeck.AppImage`, installs the NightGrid icon into the user icon theme, and updates the desktop launcher with that icon path. The Windows script downloads a fresh setup executable and launches the installer/updater. Inside the app, use the `Update` button in the top bar to pull the latest release without returning to this page.
+
+The `.deb` installer also writes `/etc/systemd/logind.conf.d/nightgrid-cyberdeck-lid.conf` so a mobile workstation keeps running with the laptop lid closed. Removing the `nightgrid-cyberdeck` package removes that drop-in. The AppImage installer does not change lid-close policy.
 
 ## Marketplace Packs
 
@@ -121,6 +125,12 @@ py -m pip install --user meshtastic
 
 The CLI needs exclusive access to the Heltec or T-Deck serial port. Disconnect the live NightGrid serial session before running `Info`, `Nodes`, or `Mesh`.
 
+## Heltec V3 War Drive
+
+Plug in the Heltec V3 and a USB GPS module, select the Heltec/Meshtastic port in the Radio tab, connect or probe the GPS module, then start `War Drive`. NightGrid polls `meshtastic --nodes`, records node IDs/names when seen, and stamps each sighting with the cached GPS fix when available. Use `Save log` to write JSONL and CSV files under the local NightGrid data folder.
+
+War Drive mode is passive. It does not scan Wi-Fi networks or send mesh messages; it only records the node list reported by your local Meshtastic device.
+
 ## Development
 
 ```bash
@@ -155,8 +165,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.20
-git push origin v0.1.20
+git tag v0.1.21
+git push origin v0.1.21
 ```
 
 The release workflow uploads:
@@ -169,5 +179,5 @@ The release workflow uploads:
 
 - Meshtastic `--info` can include private channel material. Treat copied output as sensitive.
 - Do not publish captured serial logs unless you have reviewed them.
-- GPS coordinates are displayed locally by default. Pressing `Push fix` or enabling `Auto push` sends the current fix to the selected T-Dongle bridge.
+- GPS coordinates and War Drive node sightings are displayed and saved locally by default. Pressing `Push fix` or enabling `Auto push` sends the current fix to the selected T-Dongle bridge.
 - Marketplace packs open official external project pages and only send the explicit local preset payload shown by the selected pack.

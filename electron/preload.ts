@@ -9,7 +9,9 @@ import type {
   SerialEvent,
   SerialSession,
   SerialStatusEvent,
-  UpdateResult
+  UpdateResult,
+  WarDriveRecord,
+  WarDriveSaveResult
 } from "../src/types";
 
 const on = <T>(channel: string, callback: (event: T) => void) => {
@@ -33,6 +35,8 @@ const api: NightGridApi = {
   meshNodes: (request: { path: string }) => ipcRenderer.invoke("mesh:nodes", request) as Promise<CommandResult>,
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) =>
     ipcRenderer.invoke("mesh:send-text", request) as Promise<CommandResult>,
+  saveWarDriveLog: (request: { records: WarDriveRecord[] }) =>
+    ipcRenderer.invoke("war-drive:save", request) as Promise<WarDriveSaveResult>,
   probeGps: (request: { path: string; baudRates?: number[]; timeoutMs?: number }) =>
     ipcRenderer.invoke("gps:probe", request) as Promise<CommandResult>,
   dongleCommand: (request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) =>

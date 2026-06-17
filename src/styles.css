@@ -633,6 +633,37 @@ input:focus {
   margin-top: 10px;
 }
 
+.war-drive-panel {
+  border-color: rgba(255, 209, 102, 0.34);
+}
+
+.war-drive-panel.active {
+  border-color: rgba(117, 240, 167, 0.68);
+  box-shadow: var(--glow), var(--shadow);
+}
+
+.war-drive-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.war-drive-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.war-drive-pill {
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+.war-drive-output {
+  min-height: 118px;
+  max-height: 210px;
+}
+
 .flasher-controls {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
