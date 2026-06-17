@@ -29,6 +29,8 @@ const sessions = new Map<string, LiveSession>();
 const releaseBaseUrl = "https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download";
 const linuxAppImageAsset = "NightGrid-Cyberdeck-Linux-x64.AppImage";
 const windowsSetupAsset = "NightGrid-Cyberdeck-Windows-x64-Setup.exe";
+const gpsProbeBaudRates = [9600, 38400, 4800, 57600, 115200];
+const nmeaSentencePattern = /\$(?:GP|GN|GL|GA|GB|GQ)(?:GGA|RMC|GLL|GSA|GSV|VTG),/;
 
 const now = () => new Date().toISOString();
 
@@ -244,6 +246,87 @@ const writeRawSerialPort = (port: SerialPort, data: string) =>
       else port.drain((drainError) => (drainError ? reject(drainError) : resolve()));
     });
   });
+
+const collectSerialData = (port: SerialPort, timeoutMs: number, stopPattern?: RegExp) =>
+  new Promise<string>((resolve) => {
+    let output = "";
+    const onData = (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+      if (stopPattern?.test(output)) {
+        clearTimeout(timer);
+        port.off("data", onData);
+        resolve(output);
+      }
+    };
+    const timer = setTimeout(() => {
+      port.off("data", onData);
+      resolve(output);
+    }, timeoutMs);
+
+    port.on("data", onData);
+  });
+
+const cleanSerialSample = (output: string) =>
+  output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 12)
+    .join("\n");
+
+const probeGpsAtBaud = async (pathName: string, baudRate: number, timeoutMs: number) => {
+  const existing = [...sessions.values()].find((session) => session.path === pathName);
+  if (existing) {
+    const sample = await collectSerialData(existing.port, timeoutMs, nmeaSentencePattern);
+    return { sample, ok: nmeaSentencePattern.test(sample) };
+  }
+
+  const port = new SerialPort({
+    path: pathName,
+    baudRate,
+    autoOpen: false
+  });
+
+  try {
+    await openRawSerialPort(port);
+    const sample = await collectSerialData(port, timeoutMs, nmeaSentencePattern);
+    return { sample, ok: nmeaSentencePattern.test(sample) };
+  } finally {
+    await closeRawSerialPort(port);
+  }
+};
+
+const probeGpsPort = async (pathName: string, baudRates: number[], timeoutMs: number): Promise<CommandResult> => {
+  const command = `gps-probe --port ${pathName} --baud ${baudRates.join(",")}`;
+  const failures: string[] = [];
+
+  for (const baudRate of baudRates) {
+    try {
+      const result = await probeGpsAtBaud(pathName, baudRate, timeoutMs);
+      const sample = cleanSerialSample(result.sample);
+      if (result.ok) {
+        return {
+          ok: true,
+          command,
+          code: 0,
+          stdout: [`GPS NMEA detected on ${pathName} at ${baudRate} baud.`, sample].filter(Boolean).join("\n\n"),
+          stderr: ""
+        };
+      }
+      failures.push(`${baudRate}: no NMEA${sample ? `\n${sample}` : ""}`);
+    } catch (error) {
+      failures.push(`${baudRate}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  return {
+    ok: false,
+    command,
+    code: null,
+    stdout: "",
+    stderr: `No GPS NMEA sentences detected on ${pathName}.\n${failures.join("\n\n")}`
+  };
+};
 
 const describeDongleCommand = (pathName: string, command: DongleCommandPayload) => {
   const { cmd, ...rest } = command;
@@ -587,6 +670,16 @@ const registerIpc = () => {
       args.push("--ch-index", String(request.channelIndex));
     }
     return runMeshtastic(args, 45000);
+  });
+
+  ipcMain.handle("gps:probe", async (_, request: { path: string; baudRates?: number[]; timeoutMs?: number }) => {
+    if (!request?.path) throw new Error("GPS serial port is required.");
+    const baudRates = (request.baudRates?.length ? request.baudRates : gpsProbeBaudRates)
+      .map((baud) => Number(baud))
+      .filter((baud) => Number.isFinite(baud) && baud > 0 && baud <= 921600)
+      .slice(0, 6);
+    const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 2400, 800), 8000);
+    return probeGpsPort(request.path, baudRates.length ? baudRates : gpsProbeBaudRates, timeoutMs);
   });
 
   ipcMain.handle("dongle:command", async (_, request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) => {

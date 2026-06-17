@@ -83,6 +83,7 @@ export interface NightGridApi {
   meshInfo: (request: { path: string }) => Promise<CommandResult>;
   meshNodes: (request: { path: string }) => Promise<CommandResult>;
   meshSendText: (request: { path: string; message: string; channelIndex?: number }) => Promise<CommandResult>;
+  probeGps: (request: { path: string; baudRates?: number[]; timeoutMs?: number }) => Promise<CommandResult>;
   dongleCommand: (request: { path: string; command: DongleCommandPayload; timeoutMs?: number }) => Promise<CommandResult>;
   getPlatform: () => Promise<{ platform: NodeJS.Platform; version: string }>;
   installUpdate: () => Promise<UpdateResult>;

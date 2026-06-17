@@ -70,6 +70,13 @@ const isDongleCandidate = (port: DevicePort, role?: DeviceRole) =>
   port.tags.some((tag) => /t-dongle|t-deck\/t-dongle|lilygo esp32-s3/i.test(tag)) ||
   /t-dongle|tdongle|lilygo esp32-s3/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
 
+const isGpsCandidate = (port: DevicePort, role?: DeviceRole) =>
+  role === "gps" ||
+  port.suggestedRole === "gps" ||
+  port.tags.some((tag) => /gps|nmea/i.test(tag)) ||
+  ["1546", "067B", "0403", "1A86", "10C4"].includes(port.vendorId ?? "") ||
+  /gps|nmea|ublox|u-blox|gnss|global.?sat|prolific|ftdi/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
+
 const formatTime = (iso: string) =>
   new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -78,6 +85,22 @@ const formatTime = (iso: string) =>
   }).format(new Date(iso));
 
 const formatCoord = (value?: number) => (typeof value === "number" ? value.toFixed(6) : "No fix");
+
+const formatGpsPush = (fix: GpsFix) => {
+  const coords =
+    typeof fix.lat === "number" && typeof fix.lon === "number"
+      ? `${fix.lat.toFixed(6)},${fix.lon.toFixed(6)}`
+      : "no-fix";
+  const parts = [
+    `GPS ${coords}`,
+    typeof fix.satellites === "number" ? `sat=${fix.satellites}` : "",
+    typeof fix.altitudeMeters === "number" ? `alt=${fix.altitudeMeters.toFixed(1)}m` : "",
+    typeof fix.speedKnots === "number" ? `speed=${fix.speedKnots.toFixed(1)}kt` : "",
+    fix.fixQuality ? `quality=${fix.fixQuality}` : "",
+    fix.utcTime ? `utc=${fix.utcTime}` : ""
+  ].filter(Boolean);
+  return parts.join(" ");
+};
 
 const formatCommandResult = (result: CommandResult) => {
   const parts = [
@@ -98,6 +121,12 @@ export function App() {
   const [baudByPath, setBaudByPath] = useState<Record<string, number>>({});
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [gpsFix, setGpsFix] = useState<GpsFix | null>(null);
+  const [gpsPath, setGpsPath] = useState("");
+  const [gpsBaud, setGpsBaud] = useState(9600);
+  const [gpsProbeBusy, setGpsProbeBusy] = useState(false);
+  const [gpsProbeOutput, setGpsProbeOutput] = useState("Probe a GPS serial port to confirm NMEA output.");
+  const [gpsPushBusy, setGpsPushBusy] = useState(false);
+  const [gpsAutoPush, setGpsAutoPush] = useState(false);
   const [serialInput, setSerialInput] = useState("");
   const [lineEnding, setLineEnding] = useState<"none" | "lf" | "crlf">("lf");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -119,11 +148,13 @@ export function App() {
   const [updateMessage, setUpdateMessage] = useState("");
   const logCounter = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const lastGpsPushAt = useRef(0);
 
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
   const connectedPaths = new Set(sessions.map((session) => session.path));
   const meshPorts = ports.filter((port) => isMeshRole(port.suggestedRole) || isMeshRole(roleByPath[port.path]));
   const donglePorts = ports.filter((port) => isDongleCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
+  const gpsPorts = ports.filter((port) => isGpsCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
 
   const groupedPorts = useMemo(() => {
     const known = ports.filter((port) => port.isKnownBoard);
@@ -160,6 +191,15 @@ export function App() {
       if (!meshPath) {
         const meshPort = nextPorts.find((port) => isMeshRole(port.suggestedRole));
         if (meshPort) setMeshPath(meshPort.path);
+      }
+      if (!gpsPath) {
+        const gpsPort =
+          nextPorts.find((port) => port.suggestedRole === "gps") ??
+          nextPorts.find((port) => isGpsCandidate(port, port.suggestedRole));
+        if (gpsPort) {
+          setGpsPath(gpsPort.path);
+          setGpsBaud(defaultBaud("gps"));
+        }
       }
       if (!donglePath) {
         const donglePort =
@@ -244,6 +284,92 @@ export function App() {
         channelIndex: Number.isFinite(channelIndex) ? channelIndex : undefined
       })
     );
+  };
+
+  const probeGps = async () => {
+    if (!gpsPath) return;
+    setGpsProbeBusy(true);
+    try {
+      const result = await api.probeGps({ path: gpsPath, baudRates: [gpsBaud], timeoutMs: 3200 });
+      setGpsProbeOutput(formatCommandResult(result));
+      if (result.ok) {
+        setRoleByPath((current) => ({ ...current, [gpsPath]: "gps" }));
+        setBaudByPath((current) => ({ ...current, [gpsPath]: gpsBaud }));
+      }
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: gpsPath,
+        role: "gps",
+        text: result.ok ? "GPS NMEA probe found data." : "GPS NMEA probe did not find data."
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GPS probe failed.";
+      setGpsProbeOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: gpsPath,
+        role: "gps",
+        text: message
+      });
+    } finally {
+      setGpsProbeBusy(false);
+    }
+  };
+
+  const connectGps = async () => {
+    const port = ports.find((item) => item.path === gpsPath);
+    if (!port) return;
+    setRoleByPath((current) => ({ ...current, [port.path]: "gps" }));
+    setBaudByPath((current) => ({ ...current, [port.path]: gpsBaud }));
+    try {
+      const session = await api.connectDevice({ path: port.path, baudRate: gpsBaud, role: "gps" });
+      setSessions((current) => (current.some((item) => item.id === session.id) ? current : [...current, session]));
+      setSelectedSessionId(session.id);
+    } catch (error) {
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: port.path,
+        role: "gps",
+        text: error instanceof Error ? error.message : "GPS connection failed."
+      });
+    }
+  };
+
+  const pushGpsFix = async (fix: GpsFix | null = gpsFix) => {
+    if (!fix || !donglePath) return;
+    const text = formatGpsPush(fix);
+    setGpsPushBusy(true);
+    try {
+      const textResult = await api.dongleCommand({ path: donglePath, command: { cmd: "text", text }, timeoutMs: 1800 });
+      const noteResult = await api.dongleCommand({
+        path: donglePath,
+        command: { cmd: "sd", action: "note.append", path: "/zdeck/notes/gps.log", payload: text },
+        timeoutMs: 1800
+      });
+      setDongleOutput([formatCommandResult(textResult), formatCommandResult(noteResult)].join("\n\n"));
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: donglePath,
+        role: "tdongle",
+        text: `GPS fix pushed to T-Dongle bridge: ${text}`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GPS push failed.";
+      setDongleOutput(message);
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: donglePath,
+        role: "tdongle",
+        text: message
+      });
+    } finally {
+      setGpsPushBusy(false);
+    }
   };
 
   const runDongleCommand = async (command: DongleCommandPayload, timeoutMs = 3400) => {
@@ -348,6 +474,14 @@ export function App() {
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [logs]);
+
+  useEffect(() => {
+    if (!gpsAutoPush || !gpsFix || !donglePath || gpsPushBusy) return;
+    const elapsed = Date.now() - lastGpsPushAt.current;
+    if (elapsed < 15000) return;
+    lastGpsPushAt.current = Date.now();
+    void pushGpsFix(gpsFix);
+  }, [gpsAutoPush, gpsFix, donglePath, gpsPushBusy]);
 
   return (
     <main className="app-shell">
@@ -542,10 +676,52 @@ export function App() {
               <Metric label="Latitude" value={formatCoord(gpsFix?.lat)} />
               <Metric label="Longitude" value={formatCoord(gpsFix?.lon)} />
               <Metric label="Satellites" value={gpsFix?.satellites?.toString() ?? "Unknown"} />
-              <Metric label="Altitude" value={gpsFix?.altitudeMeters ? `${gpsFix.altitudeMeters.toFixed(1)} m` : "Unknown"} />
-              <Metric label="Speed" value={gpsFix?.speedKnots ? `${gpsFix.speedKnots.toFixed(1)} kt` : "Unknown"} />
+              <Metric label="Altitude" value={typeof gpsFix?.altitudeMeters === "number" ? `${gpsFix.altitudeMeters.toFixed(1)} m` : "Unknown"} />
+              <Metric label="Speed" value={typeof gpsFix?.speedKnots === "number" ? `${gpsFix.speedKnots.toFixed(1)} kt` : "Unknown"} />
               <Metric label="Status" value={gpsFix?.fixQuality ?? "Waiting"} />
             </div>
+            <div className="gps-controls">
+              <label>
+                GPS port
+                <select value={gpsPath} onChange={(event) => setGpsPath(event.target.value)}>
+                  <option value="">Select port</option>
+                  {(gpsPorts.length ? gpsPorts : ports).map((port) => (
+                    <option value={port.path} key={port.path}>
+                      {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Baud
+                <select value={gpsBaud} onChange={(event) => setGpsBaud(Number(event.target.value))}>
+                  {[9600, 38400, 4800, 57600, 115200].map((baud) => (
+                    <option key={baud} value={baud}>
+                      {baud}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="button-grid">
+              <button className="icon-button" disabled={gpsProbeBusy || !gpsPath} onClick={probeGps}>
+                <Crosshair size={15} />
+                Probe NMEA
+              </button>
+              <button className="icon-button" disabled={!gpsPath || connectedPaths.has(gpsPath)} onClick={connectGps}>
+                <Plug size={15} />
+                Connect GPS
+              </button>
+              <button className="icon-button primary" disabled={!gpsFix || !donglePath || gpsPushBusy} onClick={() => pushGpsFix()}>
+                <Send size={15} />
+                Push fix
+              </button>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={gpsAutoPush} onChange={(event) => setGpsAutoPush(event.target.checked)} />
+                Auto push
+              </label>
+            </div>
+            <pre className="mesh-output gps-output">{gpsProbeOutput}</pre>
           </section>
 
           <section className="panel">

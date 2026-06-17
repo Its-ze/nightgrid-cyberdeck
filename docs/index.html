@@ -206,8 +206,8 @@
           <h1>NightGrid Cyberdeck</h1>
           <p class="lede">
             A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle bridge boards,
-            Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, watch NMEA fixes, run Flipper and Pico quick
-            commands, and bridge into Meshtastic from one local app.
+            Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output, push a GPS fix through
+            the T-Dongle bridge, run Flipper and Pico quick commands, and bridge into Meshtastic from one local app.
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.AppImage">Download Linux AppImage</a>
@@ -220,7 +220,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.8</span>
+            <span>NIGHTGRID 0.1.9</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -228,7 +228,7 @@
             <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
             <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
-            <div><span>GPS NMEA</span><strong>GGA/RMC parser</strong></div>
+            <div><span>GPS NMEA</span><strong>Probe / connect / push</strong></div>
           </div>
         </section>
       </header>
@@ -255,6 +255,11 @@
           <code>{"cmd":"attachProbe","deckId":"itsz-tdeck","deckName":"ITSZ T-Deck"}</code>
         </article>
         <article class="card">
+          <h2>GPS Probe / Push</h2>
+          <p>Pick a USB GPS serial port, probe for live NMEA sentences at the selected baud, connect the parser, then push fixes to the T-Dongle bridge.</p>
+          <code>{"cmd":"text","text":"GPS 38.897957,-77.036560 sat=9"}</code>
+        </article>
+        <article class="card">
           <h2>Linux Uninstall</h2>
           <p>Removes the AppImage from standard and fallback locations, plus the launcher and installed deb package if present. App settings are preserved unless you opt into purge.</p>
           <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/uninstall-linux.sh | bash</code>
@@ -266,7 +271,7 @@
         </article>
       </section>
       <footer>
-        NightGrid runs locally. Serial traffic, mesh output, and GPS coordinates stay on your machine unless you copy or send them.
+        NightGrid runs locally. Serial traffic, mesh output, and GPS coordinates stay on your machine unless you copy, send, or push them.
       </footer>
     </main>
   </body>

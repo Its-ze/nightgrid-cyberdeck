@@ -356,6 +356,32 @@ input:focus {
   gap: 10px;
 }
 
+.gps-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.checkbox-row {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: #111b28;
+}
+
+.checkbox-row input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -433,6 +459,11 @@ input:focus {
 
 .bridge-output {
   min-height: 136px;
+}
+
+.gps-output {
+  min-height: 96px;
+  max-height: 180px;
 }
 
 .empty-state {

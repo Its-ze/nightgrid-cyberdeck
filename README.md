@@ -19,11 +19,11 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Serial port scanner with Heltec, T-Deck, T-Dongle, Flipper Zero, Pico, GPS, CP210x, CH340, and ESP32 hints.
 - Role-based connect presets for Heltec/T-Deck mesh, T-Dongle serial, Flipper CLI, GPS NMEA, Pico console, and generic serial.
 - Live serial console with RX/TX/status lanes.
-- GPS fix panel for GGA/RMC NMEA sentences.
+- GPS fix panel for GGA/RMC NMEA sentences, active baud probing, and manual/auto push to the T-Dongle bridge.
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
-- T-Dongle wireless bridge panel for `cyberdeck-link-v0` probe, pairing, remote payloads, launcher/refresh, and text events.
+- T-Dongle wireless bridge panel for `cyberdeck-link-v0` probe, pairing, GPS fix push, remote payloads, launcher/refresh, and text events.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - Uninstall scripts for Linux and Windows, with optional app-settings purge.
 - GitHub Pages installer page plus GitHub Actions release builds for Linux and Windows.
@@ -122,8 +122,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.8
-git push origin v0.1.8
+git tag v0.1.9
+git push origin v0.1.9
 ```
 
 The release workflow uploads:
@@ -136,4 +136,4 @@ The release workflow uploads:
 
 - Meshtastic `--info` can include private channel material. Treat copied output as sensitive.
 - Do not publish captured serial logs unless you have reviewed them.
-- GPS coordinates are displayed locally in the app and are not transmitted by NightGrid.
+- GPS coordinates are displayed locally by default. Pressing `Push fix` or enabling `Auto push` sends the current fix to the selected T-Dongle bridge.

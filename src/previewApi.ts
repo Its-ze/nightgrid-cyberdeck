@@ -132,6 +132,28 @@ const previewDongleResponse = (path: string, command: DongleCommandPayload): Com
     );
   }
 
+  if (command.cmd === "sd") {
+    return result(
+      label,
+      JSON.stringify(
+        {
+          ok: true,
+          event: "sd",
+          action: command.action ?? "sd.status",
+          path: command.path ?? "/",
+          payload: command.payload ?? "",
+          preview: true
+        },
+        null,
+        2
+      )
+    );
+  }
+
+  if (command.cmd === "text") {
+    return result(label, JSON.stringify({ ok: true, event: "text", text: command.text ?? "", preview: true }, null, 2));
+  }
+
   return result(label, JSON.stringify({ ok: true, event: command.cmd, preview: true }, null, 2));
 };
 
@@ -219,6 +241,11 @@ export const createPreviewApi = (): NightGridApi => {
       result(`meshtastic --port ${path} --nodes`, "!preview Node, last heard now, SNR 8.5\n"),
     meshSendText: async ({ path, message }: { path: string; message: string; channelIndex?: number }) =>
       result(`meshtastic --port ${path} --sendtext ${message}`, "Preview message queued\n"),
+    probeGps: async ({ path, baudRates }: { path: string; baudRates?: number[]; timeoutMs?: number }) =>
+      result(
+        `gps-probe --port ${path} --baud ${(baudRates?.length ? baudRates : [9600, 38400, 4800]).join(",")}`,
+        "GPS NMEA detected on preview GPS at 9600 baud.\n\n$GPGGA,162500,3853.8774,N,07702.1936,W,1,09,0.9,18.2,M,0.0,M,,\n$GPRMC,162500,A,3853.8774,N,07702.1936,W,0.3,0.0,170626,,,A"
+      ),
     dongleCommand: async ({ path, command }: { path: string; command: DongleCommandPayload; timeoutMs?: number }) =>
       previewDongleResponse(path, command),
     getPlatform: async () => ({ platform: "browser" as NodeJS.Platform, version: "preview" }),
