@@ -3,8 +3,10 @@ import type {
   DevicePort,
   DeviceRole,
   DongleCommandPayload,
+  GuiCheckResult,
   GpsFix,
   NightGridApi,
+  NetworkSettingsResult,
   SerialEvent,
   SerialSession,
   SerialStatusEvent,
@@ -340,6 +342,18 @@ export const createPreviewApi = (): NightGridApi => {
     openExternal: async (url: string) => {
       window.open(url, "_blank", "noopener,noreferrer");
     },
+    checkDongleGui: async ({ url }: { url: string; timeoutMs?: number }): Promise<GuiCheckResult> => ({
+      ok: true,
+      url: url || "http://192.168.4.1",
+      statusCode: 200,
+      elapsedMs: 24,
+      message: "Preview T-Dongle GUI answered with HTTP 200."
+    }),
+    openNetworkSettings: async (): Promise<NetworkSettingsResult> => ({
+      ok: true,
+      platform: "browser" as NodeJS.Platform,
+      message: "Preview opened Wi-Fi settings. Join CyberDeck-Link, then return to NightGrid and press Open GUI."
+    }),
     onSerialData: (callback: Listener<SerialEvent>) => {
       dataListeners.add(callback);
       return () => dataListeners.delete(callback);

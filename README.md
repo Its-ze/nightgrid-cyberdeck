@@ -33,7 +33,7 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
 - Flipper Zero quick keys for `help`, `device_info`, storage listing, and power status.
 - Optional Meshtastic CLI bridge for Heltec and T-Deck info, node list, and text sends.
-- T-Dongle wireless bridge panel for opening the `CyberDeck-Link` GUI, writing the bridge URL, pairing with the T-Deck, GPS fix push, remote payloads, launcher/refresh, and text events.
+- T-Dongle wireless bridge panel for probing the `CyberDeck-Link` GUI, opening Wi-Fi settings, writing the bridge URL, pairing with the T-Deck, GPS fix push, remote payloads, launcher/refresh, and text events.
 - Packaged NightGrid app icon for Linux AppImage/deb, Linux launchers, Windows setup, the app window, and browser/installer preview.
 - In-app Update button for replacing the Linux AppImage or launching the Windows setup updater.
 - Uninstall scripts for Linux and Windows, with optional app-settings purge.
@@ -137,9 +137,10 @@ In the Radio tab, use the T-Dongle `Wireless Bridge` panel to get into the dongl
 
 1. Plug the T-Dongle into the computer and select its serial port.
 2. Press `Probe GUI` to read the dongle AP/URL from `attachProbe`.
-3. Join the `CyberDeck-Link` Wi-Fi AP if needed, then press `Open GUI` for `http://192.168.4.1`.
-4. Press `Start link` to write the bridge URL, save the T-Deck profile, trigger the auto-pair payload, and begin pairing.
-5. Enter or review the pair code, then press `Finish link` to confirm pairing and send deck-ready, launcher, and refresh commands.
+3. Press `Check GUI`. If NightGrid says `Join AP`, open `Wi-Fi settings` and join the `CyberDeck-Link` Wi-Fi AP from the laptop.
+4. Press `Open GUI` for `http://192.168.4.1`; NightGrid checks reachability first so the browser does not just sit on a timeout page.
+5. Press `Start link` to write the bridge URL, save the T-Deck profile, trigger the auto-pair payload, and begin pairing.
+6. Enter or review the pair code, then press `Finish link` to confirm pairing and send deck-ready, launcher, and refresh commands.
 
 ## Development
 
@@ -175,8 +176,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.22
-git push origin v0.1.22
+git tag v0.1.23
+git push origin v0.1.23
 ```
 
 The release workflow uploads:

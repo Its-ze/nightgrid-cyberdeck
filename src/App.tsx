@@ -21,6 +21,7 @@ import {
   Trash2,
   Terminal,
   Usb,
+  Wifi,
   Zap
 } from "lucide-react";
 import { createPreviewApi } from "./previewApi";
@@ -29,6 +30,7 @@ import type {
   DevicePort,
   DeviceRole,
   DongleCommandPayload,
+  GuiCheckResult,
   GpsFix,
   SerialEvent,
   SerialSession,
@@ -777,6 +779,8 @@ export function App() {
   const [donglePairCode, setDonglePairCode] = useState("");
   const [dongleGuiUrl, setDongleGuiUrl] = useState(defaultDongleGuiUrl);
   const [dongleGuiSsid, setDongleGuiSsid] = useState(defaultDongleSsid);
+  const [dongleGuiChecking, setDongleGuiChecking] = useState(false);
+  const [dongleGuiStatus, setDongleGuiStatus] = useState("Not checked");
   const [dongleText, setDongleText] = useState("");
   const [donglePayloadId, setDonglePayloadId] = useState("remote.deck-ready");
   const [esp32Path, setEsp32Path] = useState("");
@@ -1416,8 +1420,14 @@ export function App() {
     const apSsid = readTextField(data, "apSsid");
     const pairCode = readTextField(data, "pairCode");
     const bridgeUrl = readTextField(data, "bridgeUrl");
-    if (ip) setDongleGuiUrl(normalizeUrl(ip));
-    if (bridgeUrl) setDongleGuiUrl(normalizeUrl(bridgeUrl));
+    if (ip) {
+      setDongleGuiUrl(normalizeUrl(ip));
+      setDongleGuiStatus("Check needed");
+    }
+    if (bridgeUrl) {
+      setDongleGuiUrl(normalizeUrl(bridgeUrl));
+      setDongleGuiStatus("Check needed");
+    }
     if (apSsid) setDongleGuiSsid(apSsid);
     if (pairCode) setDonglePairCode(pairCode);
     return data;
@@ -1474,11 +1484,84 @@ export function App() {
     await runDongleCommand({ cmd: "payload", id: donglePayloadId.trim() });
   };
 
+  const formatDongleGuiCheck = (result: GuiCheckResult, opened: boolean) => {
+    const ssid = dongleGuiSsid || defaultDongleSsid;
+    const status = result.statusCode ? `HTTP ${result.statusCode}, ${result.elapsedMs} ms` : `${result.elapsedMs} ms`;
+    if (result.ok) {
+      return [
+        `T-Dongle GUI reachable at ${result.url} (${status}).`,
+        opened ? "Browser opened to the dongle GUI." : "Press Open GUI to launch the page.",
+        `If the browser still spins, reconnect this laptop to the ${ssid} Wi-Fi AP and retry.`
+      ].join("\n");
+    }
+
+    return [
+      `T-Dongle GUI is not reachable at ${result.url} (${status}).`,
+      result.message,
+      `Join Wi-Fi AP ${ssid} on this laptop, then press Check GUI or Open GUI again.`,
+      "USB serial controls still work while Wi-Fi is disconnected."
+    ].join("\n");
+  };
+
+  const checkDongleGuiReachability = async (openWhenReady = false) => {
+    const url = normalizeUrl(dongleGuiUrl);
+    setDongleGuiUrl(url);
+    setDongleGuiChecking(true);
+    setDongleGuiStatus("Checking");
+    try {
+      const result = await api.checkDongleGui({ url, timeoutMs: 1800 });
+      const opened = result.ok && openWhenReady;
+      if (opened) await api.openExternal(url);
+      setDongleGuiStatus(result.ok ? `Reachable ${result.statusCode ?? ""}`.trim() : "Join AP");
+      setDongleOutput(formatDongleGuiCheck(result, opened));
+      addLog({
+        channel: "status",
+        at: new Date().toISOString(),
+        path: donglePath || undefined,
+        role: "tdongle",
+        text: result.ok ? `T-Dongle GUI reachable at ${result.url}.` : "T-Dongle GUI is not reachable from this laptop."
+      });
+      return result.ok;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "T-Dongle GUI check failed.";
+      setDongleGuiStatus("Check failed");
+      setDongleOutput(
+        [
+          message,
+          `Join Wi-Fi AP ${dongleGuiSsid || defaultDongleSsid} on this laptop, then press Check GUI or Open GUI again.`,
+          "USB serial controls still work while Wi-Fi is disconnected."
+        ].join("\n")
+      );
+      return false;
+    } finally {
+      setDongleGuiChecking(false);
+    }
+  };
+
+  const checkDongleGui = async () => {
+    await checkDongleGuiReachability(false);
+  };
+
   const openDongleGui = async () => {
+    await checkDongleGuiReachability(true);
+  };
+
+  const openDongleGuiAnyway = async () => {
     const url = normalizeUrl(dongleGuiUrl);
     setDongleGuiUrl(url);
     await api.openExternal(url);
-    setDongleOutput(`Opened T-Dongle GUI at ${url}\nJoin Wi-Fi AP ${dongleGuiSsid || defaultDongleSsid} if the page does not load.`);
+    setDongleOutput(
+      [
+        `Opened T-Dongle GUI at ${url} without a reachability check.`,
+        `If the page times out, join Wi-Fi AP ${dongleGuiSsid || defaultDongleSsid} on this laptop and retry.`
+      ].join("\n")
+    );
+  };
+
+  const openDongleNetworkSettings = async () => {
+    const result = await api.openNetworkSettings();
+    setDongleOutput(result.message);
+    setDongleGuiStatus(result.ok ? "Join AP" : "Open Wi-Fi");
   };
 
   const probeDongleGui = async () => {
@@ -3000,19 +3083,38 @@ export function App() {
             <div className="gps-grid dongle-gui-grid">
               <Metric label="AP" value={dongleGuiSsid || defaultDongleSsid} />
               <Metric label="GUI" value={normalizeUrl(dongleGuiUrl)} />
+              <Metric label="Reach" value={dongleGuiChecking ? "Checking" : dongleGuiStatus} />
             </div>
             <label className="solo-input">
               T-Dongle GUI URL
-              <input value={dongleGuiUrl} onChange={(event) => setDongleGuiUrl(event.target.value)} />
+              <input
+                value={dongleGuiUrl}
+                onChange={(event) => {
+                  setDongleGuiUrl(event.target.value);
+                  setDongleGuiStatus("Check needed");
+                }}
+              />
             </label>
             <div className="button-grid">
               <button className="icon-button" disabled={dongleBusy || !donglePath} onClick={probeDongleGui}>
                 <Crosshair size={15} />
                 Probe GUI
               </button>
-              <button className="icon-button primary" onClick={openDongleGui}>
+              <button className="icon-button" disabled={dongleGuiChecking} onClick={checkDongleGui}>
+                <Activity size={15} />
+                Check GUI
+              </button>
+              <button className="icon-button primary" disabled={dongleGuiChecking} onClick={openDongleGui}>
                 <ExternalLink size={15} />
                 Open GUI
+              </button>
+              <button className="icon-button" onClick={openDongleNetworkSettings}>
+                <Wifi size={15} />
+                Wi-Fi settings
+              </button>
+              <button className="icon-button" onClick={openDongleGuiAnyway}>
+                <ExternalLink size={15} />
+                Open anyway
               </button>
               <button className="icon-button" disabled={dongleBusy || !donglePath} onClick={startDongleRemoteLink}>
                 <Plug size={15} />

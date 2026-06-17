@@ -209,7 +209,7 @@
           <p class="lede">
             A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle bridge boards,
             ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output,
-            record Heltec V3 War Drive node sightings with GPS stamps, open the T-Dongle GUI, connect the T-Dongle
+            record Heltec V3 War Drive node sightings with GPS stamps, check and open the T-Dongle GUI, connect the T-Dongle
             to the T-Deck remotely, push a GPS fix through the T-Dongle bridge, run Flipper and Pico quick commands,
             open curated marketplace packs, and bridge into Meshtastic from one local app.
           </p>
@@ -225,7 +225,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.22</span>
+            <span>NIGHTGRID 0.1.23</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -242,7 +242,7 @@
             <div><span>Flasher</span><strong>T-Deck / ESP32-S3</strong></div>
             <div><span>T-Deck Link</span><strong>ESP32 serial bridge</strong></div>
             <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
-            <div><span>T-Dongle GUI</span><strong>Open / pair / link</strong></div>
+            <div><span>T-Dongle GUI</span><strong>Check / Wi-Fi / open</strong></div>
             <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
             <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
             <div><span>GPS NMEA</span><strong>Cached fix</strong></div>
@@ -309,12 +309,12 @@
         </article>
         <article class="card">
           <h2>T-Dongle Bridge</h2>
-          <p>Uses the CyberDeck Link USB serial protocol to open the T-Dongle GUI, write the bridge URL, start/finish pairing, queue remote payloads, and send text/control events to a T-Deck.</p>
+          <p>Uses the CyberDeck Link USB serial protocol to check the T-Dongle GUI, open Wi-Fi settings, write the bridge URL, start/finish pairing, queue remote payloads, and send text/control events to a T-Deck.</p>
           <code>{"cmd":"attachProbe","deckId":"itsz-tdeck","deckName":"ITSZ T-Deck"}</code>
         </article>
         <article class="card">
           <h2>T-Deck Remote Link</h2>
-          <p>Guided Start link and Finish link controls save the T-Deck profile, trigger the auto-pair payload, confirm the pair code, and wake the T-Deck launcher.</p>
+          <p>Guided Check GUI, Wi-Fi settings, Start link, and Finish link controls join the CyberDeck-Link path, save the T-Deck profile, trigger the auto-pair payload, confirm the pair code, and wake the T-Deck launcher.</p>
           <code>CyberDeck-Link / http://192.168.4.1</code>
         </article>
         <article class="card">

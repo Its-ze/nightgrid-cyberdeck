@@ -85,6 +85,20 @@ export interface WarDriveSaveResult {
   message: string;
 }
 
+export interface GuiCheckResult {
+  ok: boolean;
+  url: string;
+  statusCode?: number;
+  elapsedMs: number;
+  message: string;
+}
+
+export interface NetworkSettingsResult {
+  ok: boolean;
+  platform: NodeJS.Platform;
+  message: string;
+}
+
 export type DongleCommandPayload = {
   cmd: string;
   [key: string]: string | number | boolean | undefined;
@@ -117,6 +131,8 @@ export interface NightGridApi {
   getPlatform: () => Promise<{ platform: NodeJS.Platform; version: string }>;
   installUpdate: () => Promise<UpdateResult>;
   openExternal: (url: string) => Promise<void>;
+  checkDongleGui: (request: { url: string; timeoutMs?: number }) => Promise<GuiCheckResult>;
+  openNetworkSettings: () => Promise<NetworkSettingsResult>;
   onSerialData: (callback: (event: SerialEvent) => void) => () => void;
   onSerialStatus: (callback: (event: SerialStatusEvent) => void) => () => void;
   onGpsFix: (callback: (event: GpsFix) => void) => () => void;

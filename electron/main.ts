@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import fs from "node:fs";
 import { promises as fsp } from "node:fs";
+import http from "node:http";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +12,9 @@ import type {
   DevicePort,
   DeviceRole,
   DongleCommandPayload,
+  GuiCheckResult,
   GpsFix,
+  NetworkSettingsResult,
   SerialEvent,
   SerialSession,
   SerialStatusEvent,
@@ -35,6 +38,8 @@ const linuxAppImageAsset = "NightGrid-Cyberdeck-Linux-x64.AppImage";
 const windowsSetupAsset = "NightGrid-Cyberdeck-Windows-x64-Setup.exe";
 const gpsProbeBaudRates = [9600, 38400, 4800, 57600, 115200];
 const nmeaSentencePattern = /\$(?:GP|GN|GL|GA|GB|GQ)(?:GGA|RMC|GLL|GSA|GSV|VTG),/;
+const defaultDongleGuiUrl = "http://192.168.4.1";
+const defaultDongleSsid = "CyberDeck-Link";
 
 const now = () => new Date().toISOString();
 const appIconPath = () =>
@@ -699,6 +704,156 @@ const installLatestUpdate = async (): Promise<UpdateResult> => {
   };
 };
 
+const normalizeDongleGuiCheckUrl = (value: string) => {
+  const raw = (value || "").trim();
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `http://${raw || defaultDongleGuiUrl.replace(/^https?:\/\//i, "")}`;
+  const target = new URL(withProtocol);
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    throw new Error("T-Dongle GUI URL must start with http:// or https://.");
+  }
+  if (!target.pathname) target.pathname = "/";
+  return target;
+};
+
+const dongleGuiOfflineMessage = (detail: string) =>
+  [
+    `T-Dongle GUI is not reachable${detail ? `: ${detail}` : "."}`,
+    `Join the ${defaultDongleSsid} Wi-Fi AP on this laptop, then press Check GUI or Open GUI again.`,
+    "If you are already joined, press RESET on the T-Dongle and Probe GUI again."
+  ].join(" ");
+
+const checkDongleGui = async (request: { url: string; timeoutMs?: number }): Promise<GuiCheckResult> => {
+  const started = Date.now();
+  let target: URL;
+  try {
+    target = normalizeDongleGuiCheckUrl(request.url);
+  } catch (error) {
+    return {
+      ok: false,
+      url: request.url,
+      elapsedMs: Date.now() - started,
+      message: error instanceof Error ? error.message : "Invalid T-Dongle GUI URL."
+    };
+  }
+
+  const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 1800, 700), 6000);
+  const client = target.protocol === "https:" ? https : http;
+
+  return new Promise<GuiCheckResult>((resolve) => {
+    let settled = false;
+    const finish = (result: Omit<GuiCheckResult, "elapsedMs">) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ...result, elapsedMs: Date.now() - started });
+    };
+
+    const req = client.request(
+      target,
+      {
+        method: "GET",
+        headers: {
+          "User-Agent": `NightGrid-Cyberdeck/${app.getVersion()}`
+        }
+      },
+      (response) => {
+        const statusCode = response.statusCode ?? 0;
+        response.resume();
+        finish({
+          ok: statusCode > 0 && statusCode < 500,
+          url: target.toString(),
+          statusCode,
+          message:
+            statusCode > 0 && statusCode < 500
+              ? `T-Dongle GUI answered with HTTP ${statusCode}.`
+              : dongleGuiOfflineMessage(`HTTP ${statusCode || "unknown"}`)
+        });
+      }
+    );
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`timed out after ${timeoutMs} ms`));
+    });
+
+    req.on("error", (error) => {
+      finish({
+        ok: false,
+        url: target.toString(),
+        message: dongleGuiOfflineMessage(error.message)
+      });
+    });
+
+    req.end();
+  });
+};
+
+const launchDetached = (command: string, args: string[]) =>
+  new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+
+    try {
+      const child = spawn(command, args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+      child.once("spawn", () => {
+        child.unref();
+        finish(true);
+      });
+      child.once("error", () => finish(false));
+    } catch {
+      finish(false);
+    }
+  });
+
+const openNetworkSettings = async (): Promise<NetworkSettingsResult> => {
+  if (process.platform === "win32") {
+    await shell.openExternal("ms-settings:network-wifi");
+    return {
+      ok: true,
+      platform: process.platform,
+      message: `Opened Windows Wi-Fi settings. Join ${defaultDongleSsid}, then return to NightGrid and press Open GUI.`
+    };
+  }
+
+  if (process.platform === "darwin") {
+    await shell.openExternal("x-apple.systempreferences:com.apple.preference.network");
+    return {
+      ok: true,
+      platform: process.platform,
+      message: `Opened macOS Network settings. Join ${defaultDongleSsid}, then return to NightGrid and press Open GUI.`
+    };
+  }
+
+  const linuxCandidates: Array<[string, string[]]> = [
+    ["nm-connection-editor", []],
+    ["gnome-control-center", ["wifi"]],
+    ["kcmshell6", ["kcm_networkmanagement"]],
+    ["kcmshell5", ["kcm_networkmanagement"]]
+  ];
+
+  for (const [command, args] of linuxCandidates) {
+    if (await launchDetached(command, args)) {
+      return {
+        ok: true,
+        platform: process.platform,
+        message: `Opened Linux network settings with ${command}. Join ${defaultDongleSsid}, then return to NightGrid and press Open GUI.`
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    platform: process.platform,
+    message: `Open your Wi-Fi menu manually, join ${defaultDongleSsid}, then return to NightGrid and press Open GUI.`
+  };
+};
+
 const registerIpc = () => {
   ipcMain.handle("devices:list", async () => {
     const ports = await SerialPort.list();
@@ -861,6 +1016,10 @@ const registerIpc = () => {
     if (!url.startsWith("https://") && !url.startsWith("http://")) return;
     await shell.openExternal(url);
   });
+
+  ipcMain.handle("dongle:check-gui", async (_, request: { url: string; timeoutMs?: number }) => checkDongleGui(request));
+
+  ipcMain.handle("system:open-network-settings", async () => openNetworkSettings());
 };
 
 const commandCandidates = () => {

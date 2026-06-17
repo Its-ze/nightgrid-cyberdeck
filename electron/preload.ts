@@ -4,8 +4,10 @@ import type {
   DevicePort,
   DeviceRole,
   DongleCommandPayload,
+  GuiCheckResult,
   GpsFix,
   NightGridApi,
+  NetworkSettingsResult,
   SerialEvent,
   SerialSession,
   SerialStatusEvent,
@@ -44,6 +46,9 @@ const api: NightGridApi = {
   getPlatform: () => ipcRenderer.invoke("system:platform") as Promise<{ platform: NodeJS.Platform; version: string }>,
   installUpdate: () => ipcRenderer.invoke("system:install-update") as Promise<UpdateResult>,
   openExternal: (url: string) => ipcRenderer.invoke("system:open-external", url) as Promise<void>,
+  checkDongleGui: (request: { url: string; timeoutMs?: number }) =>
+    ipcRenderer.invoke("dongle:check-gui", request) as Promise<GuiCheckResult>,
+  openNetworkSettings: () => ipcRenderer.invoke("system:open-network-settings") as Promise<NetworkSettingsResult>,
   onSerialData: (callback: (event: SerialEvent) => void) => on("serial:data", callback),
   onSerialStatus: (callback: (event: SerialStatusEvent) => void) => on("serial:status", callback),
   onGpsFix: (callback: (event: GpsFix) => void) => on("gps:fix", callback)
