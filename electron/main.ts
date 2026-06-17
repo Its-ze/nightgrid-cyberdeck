@@ -23,6 +23,8 @@ type ListedPort = Awaited<ReturnType<typeof SerialPort.list>>[number];
 interface LiveSession extends SerialSession {
   port: SerialPort;
   lineBuffer: string;
+  displayBuffer: string;
+  displayFlush?: NodeJS.Timeout;
 }
 
 const sessions = new Map<string, LiveSession>();
@@ -49,6 +51,55 @@ const sendToWindows = (channel: string, payload: unknown) => {
 
 const emitStatus = (event: Omit<SerialStatusEvent, "at">) => {
   sendToWindows("serial:status", { ...event, at: now() });
+};
+
+const ansiSequencePattern = /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[@-Z\\-_])/g;
+const serialControlPattern = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+
+const cleanSerialConsoleText = (text: string) =>
+  text.replace(ansiSequencePattern, "").replace(serialControlPattern, "").replace(/\r/g, "");
+
+const emitSerialData = (session: LiveSession, text: string) => {
+  const clean = cleanSerialConsoleText(text).trimEnd();
+  if (!clean.trim()) return;
+  const serialEvent: SerialEvent = {
+    sessionId: session.id,
+    path: session.path,
+    role: session.role,
+    text: clean,
+    at: now()
+  };
+  sendToWindows("serial:data", serialEvent);
+};
+
+const flushSerialDisplay = (session: LiveSession) => {
+  if (session.displayFlush) {
+    clearTimeout(session.displayFlush);
+    session.displayFlush = undefined;
+  }
+  if (!session.displayBuffer) return;
+  emitSerialData(session, session.displayBuffer);
+  session.displayBuffer = "";
+};
+
+const queueSerialDisplay = (session: LiveSession, text: string) => {
+  if (session.displayFlush) {
+    clearTimeout(session.displayFlush);
+    session.displayFlush = undefined;
+  }
+
+  session.displayBuffer += text;
+  const lines = session.displayBuffer.split(/\r?\n/);
+  session.displayBuffer = lines.pop() ?? "";
+  for (const line of lines) {
+    emitSerialData(session, line);
+  }
+
+  if (session.displayBuffer.length > 300) {
+    flushSerialDisplay(session);
+  } else if (session.displayBuffer.length > 0) {
+    session.displayFlush = setTimeout(() => flushSerialDisplay(session), 180);
+  }
 };
 
 const normalizeUsbId = (value?: string) => value?.toUpperCase().padStart(4, "0");
@@ -588,6 +639,7 @@ const registerIpc = () => {
       role: request.role,
       openedAt: now(),
       lineBuffer: "",
+      displayBuffer: "",
       port: new SerialPort({
         path: request.path,
         baudRate: request.baudRate,
@@ -597,14 +649,7 @@ const registerIpc = () => {
 
     session.port.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
-      const serialEvent: SerialEvent = {
-        sessionId: session.id,
-        path: session.path,
-        role: session.role,
-        text,
-        at: now()
-      };
-      sendToWindows("serial:data", serialEvent);
+      queueSerialDisplay(session, text);
 
       session.lineBuffer += text;
       const lines = session.lineBuffer.split(/\r?\n/);
@@ -625,6 +670,7 @@ const registerIpc = () => {
     });
 
     session.port.on("close", () => {
+      flushSerialDisplay(session);
       sessions.delete(session.id);
       emitStatus({
         sessionId: session.id,
@@ -655,6 +701,7 @@ const registerIpc = () => {
   ipcMain.handle("devices:disconnect", async (_, sessionId: string) => {
     const session = sessions.get(sessionId);
     if (!session) return;
+    flushSerialDisplay(session);
     await closeSerialPort(session);
     sessions.delete(sessionId);
   });
