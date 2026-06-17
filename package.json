@@ -1,6 +1,6 @@
 {
   "name": "nightgrid-cyberdeck",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "NightGrid Cyberdeck is a dark cross-platform USB field deck for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles.",
   "author": {
     "name": "Its-ze",
@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.node.json",
+    "icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit",
     "dist": "npm run build && electron-builder --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
@@ -38,12 +39,20 @@
     "productName": "NightGrid Cyberdeck",
     "copyright": "Copyright (c) 2026 Its-ze",
     "directories": {
-      "output": "release-builds"
+      "output": "release-builds",
+      "buildResources": "build"
     },
+    "icon": "build/icon.png",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
     ],
     "asarUnpack": [
       "node_modules/@serialport/**/*",
@@ -55,10 +64,12 @@
         "deb"
       ],
       "category": "Utility",
+      "icon": "build/icon.png",
       "executableName": "nightgrid-cyberdeck",
       "artifactName": "NightGrid-Cyberdeck-Linux-x64.${ext}"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

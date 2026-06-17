@@ -23,10 +23,18 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-width: 1024px;
-  min-height: 100vh;
+  min-width: 0;
+  min-height: 0;
   background:
     radial-gradient(circle at 20% 0%, rgba(81, 215, 255, 0.12), transparent 34%),
     linear-gradient(145deg, #06080d 0%, #0a111b 48%, #08110f 100%);
@@ -50,11 +58,16 @@ input:disabled {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 22px;
 }
 
 .topbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -92,10 +105,13 @@ input:disabled {
 }
 
 .dashboard {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(310px, 360px) minmax(470px, 1fr) minmax(330px, 390px);
+  grid-template-columns: minmax(280px, 340px) minmax(410px, 1fr) minmax(300px, 360px);
   gap: 16px;
   align-items: stretch;
+  overflow: hidden;
 }
 
 .panel {
@@ -105,6 +121,7 @@ input:disabled {
   box-shadow: var(--shadow);
   padding: 16px;
   min-width: 0;
+  min-height: 0;
 }
 
 .panel-heading {
@@ -177,9 +194,18 @@ input:disabled {
 }
 
 .device-panel,
-.console-panel,
+.console-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .side-stack {
-  min-height: calc(100vh - 112px);
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  padding-right: 3px;
 }
 
 .device-list,
@@ -190,7 +216,8 @@ input:disabled {
 }
 
 .device-list {
-  max-height: calc(100vh - 176px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   padding-right: 3px;
 }
@@ -294,8 +321,9 @@ input:focus {
 }
 
 .terminal-window {
-  height: calc(100vh - 284px);
-  min-height: 380px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   overflow: auto;
   border: 1px solid #1e2a3a;
   border-radius: 8px;
@@ -488,21 +516,23 @@ input:focus {
 }
 
 @media (max-width: 1180px) {
-  body {
-    min-width: 0;
-  }
-
   .dashboard {
     grid-template-columns: 1fr;
+    overflow: auto;
   }
 
   .device-panel,
-  .console-panel,
-  .side-stack {
+  .console-panel {
     min-height: auto;
+  }
+
+  .side-stack {
+    max-height: none;
+    overflow: visible;
   }
 
   .terminal-window {
     height: 440px;
+    min-height: 320px;
   }
 }

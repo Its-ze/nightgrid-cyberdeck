@@ -33,6 +33,8 @@ const gpsProbeBaudRates = [9600, 38400, 4800, 57600, 115200];
 const nmeaSentencePattern = /\$(?:GP|GN|GL|GA|GB|GQ)(?:GGA|RMC|GLL|GSA|GSV|VTG),/;
 
 const now = () => new Date().toISOString();
+const appIconPath = () =>
+  app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(__dirname, "../../build/icon.png");
 
 const sendToWindows = (channel: string, payload: unknown) => {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -179,6 +181,7 @@ const createWindow = async () => {
     minHeight: 740,
     backgroundColor: "#06080d",
     title: "NightGrid Cyberdeck",
+    icon: appIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
