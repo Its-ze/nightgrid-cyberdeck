@@ -24,7 +24,8 @@ The app runs locally. It does not send serial traffic, GPS data, or mesh output 
 - Serial console log filters for RX/TX/status plus copy and clear controls.
 - Live serial console with RX/TX/status lanes, line reassembly, and ANSI cleanup for Meshtastic firmware logs.
 - GPS fix panel for GGA/RMC NMEA sentences, active baud probing, cached fix display, and manual/auto push to the T-Dongle bridge.
-- ESP32 module panel with automatic connect, reset, bootloader, Ctrl-C/Ctrl-D, `help()`, and file listing actions.
+- ESP32 module panel with automatic connect, reset, bootloader, Ctrl-C/Ctrl-D, `help()`, file listing, and remote-control actions.
+- ESP32 Remote controls for host link, identify, heartbeat, Wi-Fi scan, I2C scan, GPIO write, and custom command send over MicroPython REPL or newline JSON Link.
 - Flasher panel for T-Deck, ESP32-S3, ESP32, and T-Dongle serial boards with web flasher, latest firmware, connect, reset, and bootloader actions.
 - ESP32 T-Deck Link controls for `cyberdeck-link-v0` probe, pair, deck-ready, launcher, and text events over the selected ESP32 serial module.
 - Pico quick keys for Ctrl-C, Ctrl-D, `help()`, and file listing.
@@ -137,8 +138,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.16
-git push origin v0.1.16
+git tag v0.1.17
+git push origin v0.1.17
 ```
 
 The release workflow uploads:

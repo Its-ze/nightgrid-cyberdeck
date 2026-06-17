@@ -43,18 +43,25 @@ interface LogEntry {
 
 type LogFilter = "all" | "rx" | "tx" | "status";
 type FlasherTarget = "tdeck" | "esp32s3" | "esp32" | "tdongle";
+type Esp32RemoteMode = "repl" | "json";
 
 const baudRates = [9600, 38400, 57600, 115200, 230400, 460800, 921600];
 const gpsFreshMs = 6000;
 const gpsCacheTtlMs = 120000;
 const zDeckFlasherUrl = "https://its-ze.github.io/Z-Deck-Web-Flasher/";
 const zDeckReleaseUrl = "https://github.com/Its-ze/Z-Deck-Web-Flasher/releases/latest";
+const esp32RemoteProtocol = "nightgrid-esp32-remote-v0";
 
 const flasherTargetLabels: Record<FlasherTarget, string> = {
   tdeck: "T-Deck",
   esp32s3: "ESP32-S3",
   esp32: "ESP32",
   tdongle: "T-Dongle"
+};
+
+const esp32RemoteModeLabels: Record<Esp32RemoteMode, string> = {
+  repl: "MicroPython REPL",
+  json: "JSON Link"
 };
 
 const roleLabels: Record<DeviceRole, string> = {
@@ -228,6 +235,11 @@ export function App() {
   const [flasherOutput, setFlasherOutput] = useState("Flasher controls will appear here.");
   const [esp32LinkText, setEsp32LinkText] = useState("NightGrid ESP32 link check");
   const [esp32LinkOutput, setEsp32LinkOutput] = useState("ESP32 T-Deck link output will appear here.");
+  const [esp32RemoteMode, setEsp32RemoteMode] = useState<Esp32RemoteMode>("repl");
+  const [esp32RemotePin, setEsp32RemotePin] = useState("2");
+  const [esp32RemoteValue, setEsp32RemoteValue] = useState("1");
+  const [esp32RemoteCommand, setEsp32RemoteCommand] = useState("print('nightgrid remote')");
+  const [esp32RemoteOutput, setEsp32RemoteOutput] = useState("ESP32 remote control output will appear here.");
   const [macroBusy, setMacroBusy] = useState("");
   const [macroOutput, setMacroOutput] = useState("Command deck ready.");
   const [platform, setPlatform] = useState<{ platform: NodeJS.Platform; version: string } | null>(null);
@@ -716,6 +728,74 @@ export function App() {
     await runEsp32Action(label, (session) => writeSession(session, data));
   };
 
+  const formatEsp32RemotePayload = (replCode: string, jsonCommand: DongleCommandPayload) =>
+    esp32RemoteMode === "json"
+      ? `${JSON.stringify({ protocol: esp32RemoteProtocol, ...jsonCommand })}\n`
+      : `${replCode.trimEnd()}\r\n`;
+
+  const sendEsp32RemotePayload = async (label: string, replCode: string, jsonCommand: DongleCommandPayload) => {
+    await runEsp32Action(`ESP32 remote ${label}`, async (session) => {
+      const payload = formatEsp32RemotePayload(replCode, jsonCommand);
+      await writeSession(session, payload);
+      setEsp32RemoteOutput(`Sent ${label} to ${session.path} (${esp32RemoteModeLabels[esp32RemoteMode]})\n${payload.trim()}`);
+    });
+  };
+
+  const linkEsp32RemoteHost = async () =>
+    sendEsp32RemotePayload(
+      "host link",
+      `print('${esp32RemoteProtocol}:linked')`,
+      {
+        cmd: "remoteLink",
+        hostId: "nightgrid-computer",
+        hostName: "NightGrid Cyberdeck"
+      }
+    );
+
+  const identifyEsp32Remote = async () =>
+    sendEsp32RemotePayload(
+      "identify",
+      "import sys, gc\nprint('nightgrid:identify sys=%s mem=%s' % (sys.platform, gc.mem_free()))",
+      { cmd: "remoteControl", action: "identify" }
+    );
+
+  const heartbeatEsp32Remote = async () =>
+    sendEsp32RemotePayload("heartbeat", "print('nightgrid:heartbeat')", { cmd: "remoteControl", action: "heartbeat" });
+
+  const scanEsp32Wifi = async () =>
+    sendEsp32RemotePayload(
+      "Wi-Fi scan",
+      "import network\nw=network.WLAN(network.STA_IF)\nw.active(True)\nprint(w.scan())",
+      { cmd: "remoteControl", action: "wifi.scan" }
+    );
+
+  const scanEsp32I2c = async () =>
+    sendEsp32RemotePayload(
+      "I2C scan",
+      "from machine import Pin, I2C\ni=I2C(0, scl=Pin(22), sda=Pin(21))\nprint(i.scan())",
+      { cmd: "remoteControl", action: "i2c.scan", scl: 22, sda: 21 }
+    );
+
+  const writeEsp32Gpio = async () => {
+    const pin = Number(esp32RemotePin);
+    if (!Number.isInteger(pin) || pin < 0 || pin > 48) {
+      setEsp32RemoteOutput("GPIO pin must be an integer from 0 to 48.");
+      return;
+    }
+    const value = esp32RemoteValue === "0" ? 0 : 1;
+    await sendEsp32RemotePayload(
+      `GPIO ${pin}=${value}`,
+      `from machine import Pin\nPin(${pin}, Pin.OUT).value(${value})\nprint('nightgrid:gpio ${pin}=${value}')`,
+      { cmd: "remoteControl", action: "gpio.write", pin, value }
+    );
+  };
+
+  const runEsp32RemoteCommand = async () => {
+    const command = esp32RemoteCommand.trim();
+    if (!command) return;
+    await sendEsp32RemotePayload("custom command", command, { cmd: "remoteCommand", code: command });
+  };
+
   const runFlasherAction = async (label: string, action: () => Promise<string | void>) => {
     setFlasherBusy(true);
     try {
@@ -1072,6 +1152,12 @@ export function App() {
         runDeckMacro("T-Deck link", () =>
           sendEsp32LinkCommand("probe", { cmd: "attachProbe", deckId: dongleDeckId, deckName: dongleDeckName })
         )
+    },
+    {
+      label: "ESP32 remote",
+      icon: Activity,
+      disabled: !esp32Path || esp32Busy,
+      action: () => runDeckMacro("ESP32 remote", linkEsp32RemoteHost)
     },
     {
       label: "Memory check",
@@ -1773,6 +1859,86 @@ export function App() {
                 List files
               </button>
             </div>
+            <div className="subsection-heading">
+              <span>ESP32 Remote</span>
+              <Activity size={16} />
+            </div>
+            <div className="remote-controls">
+              <label>
+                Mode
+                <select
+                  aria-label="ESP32 remote mode"
+                  value={esp32RemoteMode}
+                  onChange={(event) => setEsp32RemoteMode(event.target.value as Esp32RemoteMode)}
+                >
+                  {Object.entries(esp32RemoteModeLabels).map(([mode, label]) => (
+                    <option value={mode} key={mode}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Pin
+                <input
+                  aria-label="ESP32 remote GPIO pin"
+                  value={esp32RemotePin}
+                  onChange={(event) => setEsp32RemotePin(event.target.value)}
+                />
+              </label>
+              <label>
+                Value
+                <select
+                  aria-label="ESP32 remote GPIO value"
+                  value={esp32RemoteValue}
+                  onChange={(event) => setEsp32RemoteValue(event.target.value)}
+                >
+                  <option value="1">High</option>
+                  <option value="0">Low</option>
+                </select>
+              </label>
+            </div>
+            <div className="button-grid">
+              <button className="icon-button" disabled={esp32Busy || !esp32Path} onClick={linkEsp32RemoteHost}>
+                <Plug size={15} />
+                Link host
+              </button>
+              <button className="icon-button" disabled={esp32Busy || !esp32Path} onClick={identifyEsp32Remote}>
+                <Cpu size={15} />
+                Identify
+              </button>
+              <button className="icon-button" disabled={esp32Busy || !esp32Path} onClick={heartbeatEsp32Remote}>
+                <Activity size={15} />
+                Heartbeat
+              </button>
+              <button className="icon-button" disabled={esp32Busy || !esp32Path} onClick={scanEsp32Wifi}>
+                <Radio size={15} />
+                Wi-Fi scan
+              </button>
+              <button className="icon-button" disabled={esp32Busy || !esp32Path} onClick={scanEsp32I2c}>
+                <Crosshair size={15} />
+                I2C scan
+              </button>
+              <button className="icon-button" disabled={esp32Busy || !esp32Path} onClick={writeEsp32Gpio}>
+                <Zap size={15} />
+                GPIO write
+              </button>
+            </div>
+            <div className="remote-send">
+              <input
+                value={esp32RemoteCommand}
+                onChange={(event) => setEsp32RemoteCommand(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") runEsp32RemoteCommand();
+                }}
+                placeholder="Remote command"
+              />
+              <button className="icon-button primary" disabled={esp32Busy || !esp32Path || !esp32RemoteCommand.trim()} onClick={runEsp32RemoteCommand}>
+                <Send size={15} />
+                Run
+              </button>
+            </div>
+            <pre className="mesh-output remote-output">{esp32RemoteOutput}</pre>
             <div className="subsection-heading">
               <span>T-Deck Link</span>
               <Radio size={16} />

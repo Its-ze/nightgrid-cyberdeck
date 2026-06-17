@@ -220,7 +220,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.16</span>
+            <span>NIGHTGRID 0.1.17</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -230,6 +230,7 @@
             <div><span>Command Deck</span><strong>Macros / log tools</strong></div>
             <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
             <div><span>ESP32 module</span><strong>Auto connect</strong></div>
+            <div><span>ESP32 Remote</span><strong>REPL / JSON Link</strong></div>
             <div><span>Flasher</span><strong>T-Deck / ESP32-S3</strong></div>
             <div><span>T-Deck Link</span><strong>ESP32 serial bridge</strong></div>
             <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
@@ -263,8 +264,13 @@
         </article>
         <article class="card">
           <h2>ESP32 Module</h2>
-          <p>Auto-connects generic ESP32 serial modules and exposes reset, bootloader, Ctrl-C/Ctrl-D, help, file-list, and T-Deck Link actions.</p>
+          <p>Auto-connects generic ESP32 serial modules and exposes reset, bootloader, Ctrl-C/Ctrl-D, help, file-list, remote-control, and T-Deck Link actions.</p>
           <code>CP210x / CH340 / Espressif USB serial</code>
+        </article>
+        <article class="card">
+          <h2>ESP32 Remote</h2>
+          <p>Links a selected ESP32 to the computer, then sends identify, heartbeat, Wi-Fi scan, I2C scan, GPIO write, and custom commands over REPL or JSON Link.</p>
+          <code>Link host / Identify / GPIO write / Run</code>
         </article>
         <article class="card">
           <h2>Flasher</h2>

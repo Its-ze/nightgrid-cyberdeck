@@ -585,6 +585,12 @@ input:focus {
   gap: 8px;
 }
 
+.remote-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 92px;
+  gap: 8px;
+}
+
 .checkbox-row {
   min-height: 38px;
   display: inline-flex;
@@ -674,6 +680,13 @@ input:focus {
   margin-top: 10px;
 }
 
+.remote-send {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .solo-input {
   margin-top: 10px;
 }
@@ -716,6 +729,11 @@ input:focus {
 .link-output {
   min-height: 94px;
   max-height: 150px;
+}
+
+.remote-output {
+  min-height: 112px;
+  max-height: 170px;
 }
 
 .subsection-heading {
@@ -842,8 +860,10 @@ input:focus {
   .command-row,
   .mesh-send,
   .bridge-send,
+  .remote-send,
   .gps-controls,
   .flasher-controls,
+  .remote-controls,
   .bridge-grid {
     grid-template-columns: 1fr;
     flex-direction: column;
