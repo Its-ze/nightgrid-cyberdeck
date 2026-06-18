@@ -527,6 +527,12 @@ const defaultBaud = (role: DeviceRole) => (role === "gps" ? 9600 : 115200);
 
 const isMeshRole = (role?: DeviceRole) => role === "heltec" || role === "tdeck";
 
+const hasDongleIdentity = (port: DevicePort, role?: DeviceRole) =>
+  role === "tdongle" ||
+  port.suggestedRole === "tdongle" ||
+  port.tags.some((tag) => /t-dongle|tdongle/i.test(tag)) ||
+  /t-dongle|tdongle|dongle/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
+
 const isDongleCandidate = (port: DevicePort, role?: DeviceRole) =>
   role === "tdongle" ||
   port.suggestedRole === "tdongle" ||
@@ -556,6 +562,24 @@ const isGpsCandidate = (port: DevicePort, role?: DeviceRole) =>
   port.tags.some((tag) => /gps|nmea/i.test(tag)) ||
   ["1546", "067B", "0403", "1A86", "10C4"].includes(port.vendorId ?? "") ||
   /gps|nmea|ublox|u-blox|gnss|global.?sat|prolific|ftdi/i.test(`${port.friendlyName} ${port.manufacturer ?? ""}`);
+
+const isWarDriveMeshCandidate = (port: DevicePort, role?: DeviceRole) => {
+  if (hasDongleIdentity(port, role)) return false;
+  if (role === "heltec" || role === "tdeck") return true;
+  return port.tags.some((tag) => /heltec|meshtastic|lora/i.test(tag));
+};
+
+const describePort = (port: DevicePort) =>
+  [port.path, port.friendlyName ? `- ${port.friendlyName}` : ""].filter(Boolean).join(" ");
+
+const warDriveBlockedMessage = (port: DevicePort, role?: DeviceRole) => {
+  if (hasDongleIdentity(port, role)) {
+    return `War Drive needs a Heltec V3 or T-Deck Meshtastic receiver, not the T-Dongle bridge on ${port.path}.`;
+  }
+  if (role === "gps") return `War Drive receiver is set to the GPS module on ${port.path}. Select the Heltec V3 mesh port instead.`;
+  if (role === "esp32") return `War Drive receiver is set to an ESP32 module on ${port.path}. Select the Heltec V3 mesh port instead.`;
+  return `War Drive cannot use ${port.path} as a mesh receiver. Select a Heltec V3 or T-Deck running Meshtastic.`;
+};
 
 const formatTime = (iso: string) =>
   new Intl.DateTimeFormat(undefined, {
@@ -774,6 +798,9 @@ export function App() {
   const [warDriveActive, setWarDriveActive] = useState(false);
   const [warDriveInterval, setWarDriveInterval] = useState("20");
   const [warDriveSaving, setWarDriveSaving] = useState(false);
+  const [warDriveRequireGps, setWarDriveRequireGps] = useState(true);
+  const [warDriveLastPollAt, setWarDriveLastPollAt] = useState("");
+  const [warDriveLastNewCount, setWarDriveLastNewCount] = useState(0);
   const [warDriveRecords, setWarDriveRecords] = useState<WarDriveRecord[]>([]);
   const [warDriveOutput, setWarDriveOutput] = useState("War Drive mode is idle. Select a Heltec V3 mesh port and connect your GPS module.");
   const [donglePath, setDonglePath] = useState("");
@@ -820,7 +847,9 @@ export function App() {
   const lastGpsPushedFixAt = useRef<number | null>(null);
   const gpsFixRef = useRef<GpsFix | null>(null);
   const gpsLastFixAtRef = useRef<number | null>(null);
+  const portsRef = useRef<DevicePort[]>([]);
   const warDriveBusyRef = useRef(false);
+  const warDriveRequireGpsRef = useRef(true);
   const warDriveRecordsRef = useRef<WarDriveRecord[]>([]);
   const warDriveSeenRef = useRef(new Map<string, { seenAtMs: number; coordKey: string }>());
   const sessionsRef = useRef<SerialSession[]>([]);
@@ -839,6 +868,7 @@ export function App() {
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
   const connectedPaths = new Set(sessions.map((session) => session.path));
   const meshPorts = ports.filter((port) => isMeshRole(port.suggestedRole) || isMeshRole(roleByPath[port.path]));
+  const warDriveMeshPorts = ports.filter((port) => isWarDriveMeshCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const donglePorts = ports.filter((port) => isDongleCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const esp32Ports = ports.filter((port) => isEsp32Candidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const esp32Session = sessions.find((session) => session.path === esp32Path) ?? sessions.find((session) => session.role === "esp32");
@@ -847,8 +877,18 @@ export function App() {
   const gpsPorts = ports.filter((port) => isGpsCandidate(port, roleByPath[port.path] ?? port.suggestedRole));
   const gpsFixAgeMs = gpsLastFixAt === null ? null : Math.max(0, gpsNow - gpsLastFixAt);
   const gpsCanPush = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
+  const warDriveGpsReady = Boolean(gpsFix && hasGpsCoordinates(gpsFix) && gpsFixAgeMs !== null && gpsFixAgeMs <= gpsCacheTtlMs);
   const gpsStatus = formatGpsStatus(gpsFix, gpsFixAgeMs);
   const latestWarDriveRecord = warDriveRecords[warDriveRecords.length - 1];
+  const selectedWarDrivePort = warDriveMeshPorts.find((port) => port.path === meshPath) ?? warDriveMeshPorts[0];
+  const warDriveState = warDriveActive
+    ? warDriveRequireGps && !warDriveGpsReady
+      ? "Waiting GPS"
+      : "Recording"
+    : selectedWarDrivePort
+      ? "Ready"
+      : "No receiver";
+  const warDriveGpsLabel = warDriveRequireGps ? (warDriveGpsReady ? "GPS locked" : "Need GPS") : warDriveGpsReady ? "GPS cached" : "GPS off";
   const warDriveIntervalSeconds = Math.min(Math.max(Number(warDriveInterval) || 20, 10), 300);
   const knownPortCount = ports.filter((port) => port.isKnownBoard).length;
   const logStats = useMemo(
@@ -920,6 +960,7 @@ export function App() {
   };
 
   const applyScannedPorts = (nextPorts: DevicePort[], options: { log?: boolean } = {}) => {
+    portsRef.current = nextPorts;
     setPorts(nextPorts);
     const scannedPaths = new Set(nextPorts.map((port) => port.path));
     for (const path of esp32AutoConnected.current) {
@@ -943,7 +984,10 @@ export function App() {
     });
 
     if (!meshPathRef.current) {
-      const meshPort = nextPorts.find((port) => isMeshRole(port.suggestedRole));
+      const meshPort =
+        nextPorts.find((port) => isWarDriveMeshCandidate(port, port.suggestedRole) && port.suggestedRole === "heltec") ??
+        nextPorts.find((port) => isWarDriveMeshCandidate(port, port.suggestedRole)) ??
+        nextPorts.find((port) => isMeshRole(port.suggestedRole));
       if (meshPort) {
         meshPathRef.current = meshPort.path;
         setMeshPath(meshPort.path);
@@ -1168,10 +1212,56 @@ export function App() {
     });
   };
 
+  const selectWarDriveMeshPort = () => {
+    const availablePorts = portsRef.current;
+    const selected = availablePorts.find((port) => port.path === meshPathRef.current);
+    const selectedRole = selected ? roleByPathRef.current[selected.path] ?? selected.suggestedRole : undefined;
+
+    if (selected && isWarDriveMeshCandidate(selected, selectedRole)) {
+      return { port: selected, note: "" };
+    }
+
+    const fallback =
+      availablePorts.find((port) => {
+        const role = roleByPathRef.current[port.path] ?? port.suggestedRole;
+        return role === "heltec" && isWarDriveMeshCandidate(port, role);
+      }) ??
+      availablePorts.find((port) => {
+        const role = roleByPathRef.current[port.path] ?? port.suggestedRole;
+        return isWarDriveMeshCandidate(port, role);
+      });
+
+    if (fallback) {
+      const note = selected ? `${warDriveBlockedMessage(selected, selectedRole)} Using ${fallback.path} instead.` : "";
+      return { port: fallback, note };
+    }
+
+    const blockedNote = selected ? warDriveBlockedMessage(selected, selectedRole) : "Plug in a Heltec V3 / Meshtastic receiver and scan before starting War Drive.";
+    return { port: null, note: blockedNote };
+  };
+
   const recordWarDriveNodes = async (reason = "poll") => {
-    const targetPath = meshPathRef.current || meshPorts[0]?.path;
-    if (!targetPath) {
-      setWarDriveOutput("Select or plug in a Heltec V3 / Meshtastic serial port first.");
+    const { port: targetPort, note: targetNote } = selectWarDriveMeshPort();
+    if (!targetPort) {
+      setWarDriveOutput(targetNote);
+      return false;
+    }
+    const targetPath = targetPort.path;
+    const fix = gpsFixRef.current;
+    const ageMs = gpsLastFixAtRef.current === null ? null : Math.max(0, Date.now() - gpsLastFixAtRef.current);
+    const hasFreshCachedGps = Boolean(fix && hasGpsCoordinates(fix) && ageMs !== null && ageMs <= gpsCacheTtlMs);
+    const status = formatGpsStatus(fix, ageMs);
+    if (warDriveRequireGpsRef.current && !hasFreshCachedGps) {
+      setWarDriveOutput(
+        [
+          targetNote,
+          "Waiting for a GPS fix before recording War Drive sightings.",
+          `GPS: ${status}`,
+          "Connect/probe the GPS module or turn off Require GPS for bench testing."
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
       return false;
     }
     if (sessionsRef.current.some((session) => session.path === targetPath)) {
@@ -1201,11 +1291,7 @@ export function App() {
       }
 
       const nodes = parseMeshNodeOutput(`${result.stdout}\n${result.stderr}`);
-      const fix = gpsFixRef.current;
-      const ageMs = gpsLastFixAtRef.current === null ? null : Math.max(0, Date.now() - gpsLastFixAtRef.current);
-      const hasFreshCachedGps = Boolean(fix && hasGpsCoordinates(fix) && ageMs !== null && ageMs <= gpsCacheTtlMs);
       const coordKey = hasFreshCachedGps && fix ? `${fix.lat?.toFixed(4)},${fix.lon?.toFixed(4)}` : "no-gps";
-      const status = formatGpsStatus(fix, ageMs);
       const seenAtMs = Date.now();
       const seenAt = new Date(seenAtMs).toISOString();
       const newRecords: WarDriveRecord[] = [];
@@ -1233,10 +1319,13 @@ export function App() {
       }
 
       appendWarDriveRecords(newRecords);
+      setWarDriveLastPollAt(seenAt);
+      setWarDriveLastNewCount(newRecords.length);
       const gpsLine = hasFreshCachedGps && fix ? `${fix.lat?.toFixed(6)}, ${fix.lon?.toFixed(6)} (${status})` : status;
       setWarDriveOutput(
         [
-          `${reason === "manual" ? "Manual mark" : "War Drive poll"}: ${nodes.length} node${nodes.length === 1 ? "" : "s"} parsed from ${targetPath}.`,
+          targetNote,
+          `${reason === "start" ? "Start poll" : reason === "manual" ? "Drive poll" : "War Drive poll"}: ${nodes.length} node${nodes.length === 1 ? "" : "s"} parsed from ${targetPath}.`,
           `${newRecords.length} new sighting${newRecords.length === 1 ? "" : "s"} recorded.`,
           `GPS: ${gpsLine}`,
           nodes.length === 0 ? "No Meshtastic node IDs were found in CLI output." : "",
@@ -1248,6 +1337,13 @@ export function App() {
           .filter(Boolean)
           .join("\n")
       );
+      addLog({
+        channel: "status",
+        at: seenAt,
+        path: targetPath,
+        role: roleByPathRef.current[targetPath] ?? targetPort.suggestedRole,
+        text: `War Drive poll recorded ${newRecords.length} new sighting${newRecords.length === 1 ? "" : "s"} at ${gpsLine}.`
+      });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "War Drive poll failed.";
@@ -1266,13 +1362,26 @@ export function App() {
   };
 
   const startWarDrive = () => {
-    if (!meshPathRef.current && !meshPorts[0]?.path) {
-      setWarDriveOutput("Plug in a Heltec V3 / Meshtastic serial port and scan before starting War Drive mode.");
+    const { port: targetPort, note } = selectWarDriveMeshPort();
+    if (!targetPort) {
+      setWarDriveOutput(note);
       return;
     }
+    if (targetPort.path !== meshPathRef.current) {
+      setMeshPath(targetPort.path);
+      meshPathRef.current = targetPort.path;
+    }
     setWarDriveActive(true);
-    setWarDriveOutput(`War Drive armed. Polling every ${warDriveIntervalSeconds}s.`);
-    void recordWarDriveNodes("manual");
+    setWarDriveOutput(
+      [
+        note,
+        `War Drive running on ${targetPort.path}. Polling every ${warDriveIntervalSeconds}s.`,
+        warDriveRequireGpsRef.current && !warDriveGpsReady ? `Waiting for GPS: ${gpsStatus}` : `GPS: ${gpsStatus}`
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+    void recordWarDriveNodes("start");
   };
 
   const stopWarDrive = () => {
@@ -2267,6 +2376,10 @@ export function App() {
   }, [sessions]);
 
   useEffect(() => {
+    portsRef.current = ports;
+  }, [ports]);
+
+  useEffect(() => {
     roleByPathRef.current = roleByPath;
   }, [roleByPath]);
 
@@ -2285,6 +2398,10 @@ export function App() {
   useEffect(() => {
     warDriveRecordsRef.current = warDriveRecords;
   }, [warDriveRecords]);
+
+  useEffect(() => {
+    warDriveRequireGpsRef.current = warDriveRequireGps;
+  }, [warDriveRequireGps]);
 
   useEffect(() => {
     meshPathRef.current = meshPath;
@@ -2479,11 +2596,11 @@ export function App() {
         })
     },
     {
-      label: "War mark",
+      label: "Drive poll",
       icon: Crosshair,
-      disabled: !meshPath || warDriveBusyRef.current,
+      disabled: !selectedWarDrivePort || warDriveBusyRef.current,
       action: () =>
-        runDeckMacro("War mark", async () => {
+        runDeckMacro("Drive poll", async () => {
           return recordWarDriveNodes("manual");
         })
     },
@@ -3072,8 +3189,12 @@ export function App() {
               <Crosshair size={22} />
             </div>
             <div className="gps-grid war-drive-grid">
-              <Metric label="Mode" value={warDriveActive ? "Recording" : "Idle"} />
+              <Metric label="Mode" value={warDriveState} />
               <Metric label="Sightings" value={warDriveRecords.length.toString()} />
+              <Metric label="Receiver" value={selectedWarDrivePort?.path ?? "None"} />
+              <Metric label="GPS gate" value={warDriveGpsLabel} />
+              <Metric label="Last poll" value={warDriveLastPollAt ? formatTime(warDriveLastPollAt) : "None"} />
+              <Metric label="New last" value={warDriveLastNewCount.toString()} />
               <Metric label="Last node" value={latestWarDriveRecord?.nodeId ?? "None"} />
               <Metric
                 label="Last fix"
@@ -3087,11 +3208,14 @@ export function App() {
             <div className="war-drive-controls">
               <label>
                 Heltec / mesh port
-                <select value={meshPath} onChange={(event) => setMeshPath(event.target.value)}>
+                <select
+                  value={warDriveMeshPorts.some((port) => port.path === meshPath) ? meshPath : ""}
+                  onChange={(event) => setMeshPath(event.target.value)}
+                >
                   <option value="">Select port</option>
-                  {(meshPorts.length ? meshPorts : ports).map((port) => (
+                  {warDriveMeshPorts.map((port) => (
                     <option value={port.path} key={port.path}>
-                      {port.path} {port.friendlyName ? `- ${port.friendlyName}` : ""}
+                      {describePort(port)}
                     </option>
                   ))}
                 </select>
@@ -3107,14 +3231,19 @@ export function App() {
               </label>
             </div>
             <div className="button-grid">
-              <button className="icon-button primary" disabled={!meshPath && !meshPorts[0]?.path} onClick={warDriveActive ? stopWarDrive : startWarDrive}>
+              <button className="icon-button primary" disabled={!selectedWarDrivePort} onClick={warDriveActive ? stopWarDrive : startWarDrive}>
                 <Power size={15} />
                 {warDriveActive ? "Stop" : "Start"}
               </button>
-              <button className="icon-button" disabled={!meshPath && !meshPorts[0]?.path} onClick={() => recordWarDriveNodes("manual")}>
+              <button className="icon-button" disabled={!selectedWarDrivePort || warDriveBusyRef.current} onClick={() => recordWarDriveNodes("manual")}>
                 <Crosshair size={15} />
-                Mark now
+                Poll now
               </button>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={warDriveRequireGps} onChange={(event) => setWarDriveRequireGps(event.target.checked)} />
+                Require GPS
+              </label>
+              <span className="status-pill war-drive-pill">{warDriveGpsLabel}</span>
               <button className="icon-button" disabled={warDriveSaving || warDriveRecords.length === 0} onClick={saveWarDriveRecords}>
                 <Download size={15} />
                 Save log
@@ -3127,7 +3256,6 @@ export function App() {
                 <Trash2 size={15} />
                 Clear
               </button>
-              <span className="status-pill war-drive-pill">{gpsCanPush ? "GPS cached" : "GPS optional"}</span>
             </div>
             <pre className="mesh-output war-drive-output">{warDriveOutput}</pre>
           </section>

@@ -209,7 +209,7 @@
           <p class="lede">
             A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle bridge boards,
             ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output,
-            record Heltec V3 War Drive node sightings with GPS stamps, buffer split T-Dongle USB heartbeats, check and open the T-Dongle GUI, connect the T-Dongle
+            record continuous Heltec V3 War Drive node sightings with GPS stamps, buffer split T-Dongle USB heartbeats, check and open the T-Dongle GUI, connect the T-Dongle
             to the T-Deck remotely, push a GPS fix through the T-Dongle bridge, run Flipper and Pico quick commands,
             open curated marketplace packs, and bridge into Meshtastic from one local app.
           </p>
@@ -225,7 +225,7 @@
         </section>
         <section class="deck-screen" aria-label="NightGrid feature preview">
           <div class="screen-top">
-            <span>NIGHTGRID 0.1.25</span>
+            <span>NIGHTGRID 0.1.26</span>
             <span>LOCAL USB</span>
           </div>
           <div class="readout">
@@ -269,8 +269,8 @@
         </article>
         <article class="card">
           <h2>Heltec V3 War Drive</h2>
-          <p>Polls the selected Heltec V3 or Meshtastic serial port for known nodes, stamps sightings with cached USB GPS fixes, and saves local JSONL/CSV logs.</p>
-          <code>Start / Mark now / Save log / Copy CSV</code>
+          <p>Continuously polls the selected Heltec V3 or Meshtastic receiver while you move, requires GPS by default, stamps node sightings with cached USB GPS fixes, and saves local JSONL/CSV logs.</p>
+          <code>Start / Poll now / Require GPS / Save log</code>
         </article>
         <article class="card">
           <h2>Linux Deb Lid Mode</h2>

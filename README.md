@@ -127,7 +127,7 @@ The CLI needs exclusive access to the Heltec or T-Deck serial port. Disconnect t
 
 ## Heltec V3 War Drive
 
-Plug in the Heltec V3 and a USB GPS module, select the Heltec/Meshtastic port in the Radio tab, connect or probe the GPS module, then start `War Drive`. NightGrid polls `meshtastic --nodes`, records node IDs/names when seen, and stamps each sighting with the cached GPS fix when available. Use `Save log` to write JSONL and CSV files under the local NightGrid data folder.
+Plug in the Heltec V3 and a USB GPS module, select the Heltec/Meshtastic receiver in the Radio tab, connect or probe the GPS module, then start `War Drive`. NightGrid continuously polls `meshtastic --nodes`, records node IDs/names while you move, and stamps each sighting with the current or recently cached GPS fix. `Require GPS` is on by default, so the drive waits instead of recording weak no-location sightings. Use `Save log` to write JSONL and CSV files under the local NightGrid data folder.
 
 War Drive mode is passive. It does not scan Wi-Fi networks or send mesh messages; it only records the node list reported by your local Meshtastic device.
 
@@ -144,7 +144,7 @@ In the Radio tab, use the T-Dongle `Wireless Bridge` panel to get into the dongl
 
 If the USB readout says `Alive` but reachability says `Join AP`, the dongle is working over USB and the only missing piece is that the laptop is not connected to the dongle Wi-Fi AP. USB serial commands still work in that state.
 
-NightGrid buffers split `cyberdeck.dongle.attach` JSON frames before logging them, so the RX log should not fill with half-lines like `"commands"` followed by `:["pairing", ...]}`. Command Deck buttons also report failure when the matching panel action fails, including War Drive manual marks and Mesh/Dongle actions.
+NightGrid buffers split `cyberdeck.dongle.attach` JSON frames before logging them, so the RX log should not fill with half-lines like `"commands"` followed by `:["pairing", ...]}`. Command Deck buttons also report failure when the matching panel action fails, including War Drive poll and Mesh/Dongle actions.
 
 ## Development
 
@@ -180,8 +180,8 @@ If you are developing from a path with spaces on Windows, do not run native rebu
 Push a version tag to build release installers:
 
 ```bash
-git tag v0.1.25
-git push origin v0.1.25
+git tag v0.1.26
+git push origin v0.1.26
 ```
 
 The release workflow uploads:
