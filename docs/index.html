@@ -3,26 +3,36 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>NightGrid Cyberdeck Installer</title>
-    <link rel="icon" type="image/png" href="icon.png" />
-    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <title>NightGrid Cyberdeck</title>
+    <meta name="theme-color" content="#0b0f14" />
     <meta
       name="description"
-      content="Install NightGrid Cyberdeck, a dark USB field console for Heltec V3, LilyGO T-Deck, LILYGO T-Dongle, ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial devices."
+      content="Install NightGrid Cyberdeck, a local USB field console for Heltec V3, LilyGO T-Deck, T-Dongle, ESP32, Flipper Zero, GPS, Pico, and serial devices."
     />
+    <meta property="og:title" content="NightGrid Cyberdeck" />
+    <meta property="og:description" content="A local USB field console for mesh radios, ESP32 boards, GPS, Flipper, Pico, and serial devices." />
+    <meta property="og:image" content="https://its-ze.github.io/nightgrid-cyberdeck/icon.png" />
+    <link rel="icon" type="image/png" href="icon.png" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
     <style>
       :root {
         color-scheme: dark;
+        --bg: #080a0d;
+        --surface: #111820;
+        --surface-2: #151f27;
+        --surface-3: #0c1117;
+        --line: #2a3943;
+        --text: #edf4ef;
+        --muted: #aeb9b4;
+        --soft: #d7e1dd;
+        --cyan: #55d7e8;
+        --green: #75e39a;
+        --amber: #f2c25b;
+        --red: #ec766e;
+        --violet: #a9a0ff;
+        --shadow: rgba(0, 0, 0, 0.38);
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        --bg: #06080d;
-        --panel: rgba(14, 20, 30, 0.86);
-        --line: #263348;
-        --text: #ebf4ff;
-        --muted: #99a9ba;
-        --cyan: #51d7ff;
-        --green: #75f0a7;
-        --amber: #ffd166;
       }
 
       * {
@@ -34,9 +44,10 @@
         min-height: 100vh;
         color: var(--text);
         background:
-          linear-gradient(rgba(6, 8, 13, 0.84), rgba(6, 8, 13, 0.92)),
-          repeating-linear-gradient(90deg, rgba(81, 215, 255, 0.1) 0 1px, transparent 1px 80px),
-          linear-gradient(145deg, #06080d, #0d1623 54%, #08130f);
+          linear-gradient(180deg, rgba(8, 10, 13, 0.94), rgba(8, 10, 13, 0.98)),
+          linear-gradient(120deg, rgba(85, 215, 232, 0.16), transparent 36%),
+          linear-gradient(300deg, rgba(117, 227, 154, 0.12), transparent 42%),
+          var(--bg);
       }
 
       a {
@@ -46,296 +57,656 @@
       .shell {
         width: min(1180px, calc(100% - 32px));
         margin: 0 auto;
-        padding: 34px 0;
       }
 
-      header {
-        min-height: 72vh;
+      .topbar {
+        min-height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid rgba(85, 215, 232, 0.22);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        font-weight: 900;
+        text-decoration: none;
+      }
+
+      .brand img {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .nav a {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 0 10px;
+        text-decoration: none;
+      }
+
+      .nav a:hover {
+        border-color: rgba(85, 215, 232, 0.3);
+        color: var(--text);
+        background: rgba(17, 24, 32, 0.76);
+      }
+
+      .hero {
+        min-height: calc(100vh - 64px);
         display: grid;
         align-items: center;
-        grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-        gap: 34px;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+        gap: 40px;
+        padding: 48px 0 34px;
       }
 
       .eyebrow {
         margin: 0 0 12px;
         color: var(--green);
-        font-size: 13px;
-        font-weight: 800;
+        font-size: 12px;
+        font-weight: 900;
         letter-spacing: 0.12em;
         text-transform: uppercase;
       }
 
-      h1 {
-        margin: 0;
-        font-size: clamp(44px, 8vw, 92px);
-        line-height: 0.94;
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
         letter-spacing: 0;
       }
 
+      h1 {
+        max-width: 780px;
+        margin-bottom: 18px;
+        font-size: clamp(44px, 8vw, 88px);
+        line-height: 0.96;
+      }
+
       .lede {
-        max-width: 690px;
-        margin: 20px 0 0;
-        color: #c7d5e7;
-        font-size: 19px;
-        line-height: 1.6;
+        max-width: 760px;
+        margin-bottom: 0;
+        color: #d5e0dc;
+        font-size: clamp(17px, 2.1vw, 21px);
+        line-height: 1.55;
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 10px;
         margin-top: 28px;
       }
 
       .button {
-        min-height: 44px;
+        min-height: 46px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid var(--line);
+        border: 1px solid rgba(215, 225, 221, 0.2);
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 0 14px;
+        color: var(--text);
+        background: rgba(17, 24, 32, 0.84);
+        font-weight: 850;
         text-decoration: none;
-        background: #111b28;
       }
 
       .button.primary {
-        border-color: rgba(81, 215, 255, 0.75);
-        background: linear-gradient(180deg, #14364c, #102235);
+        border-color: rgba(85, 215, 232, 0.7);
+        color: #041116;
+        background: linear-gradient(90deg, var(--cyan), var(--green));
       }
 
-      .deck-screen {
-        border: 1px solid var(--line);
+      .button:hover {
+        transform: translateY(-1px);
+      }
+
+      .button:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--amber);
+        outline-offset: 3px;
+      }
+
+      .command-strip {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .command {
+        min-width: 0;
+        border: 1px solid rgba(85, 215, 232, 0.22);
         border-radius: 8px;
-        padding: 18px;
-        background: var(--panel);
-        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.38);
+        padding: 12px;
+        background: rgba(6, 8, 13, 0.62);
       }
 
-      .screen-top {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
+      .command span {
+        display: block;
+        margin-bottom: 7px;
         color: var(--muted);
         font-size: 12px;
-        margin-bottom: 16px;
+        font-weight: 850;
+        text-transform: uppercase;
       }
 
-      .readout {
-        display: grid;
-        gap: 10px;
-      }
-
-      .readout div {
-        display: flex;
-        justify-content: space-between;
-        gap: 18px;
-        border: 1px solid #223049;
-        border-radius: 8px;
-        padding: 11px 12px;
-        background: #080d14;
-      }
-
-      .readout span {
-        color: var(--muted);
-      }
-
-      .readout strong {
-        color: var(--cyan);
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: -20px;
-      }
-
-      .card {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 18px;
-        background: var(--panel);
-      }
-
-      .card h2 {
-        margin: 0 0 10px;
-        font-size: 20px;
-      }
-
-      .card p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.55;
+      .command code {
+        overflow-wrap: anywhere;
+        white-space: normal;
+        line-height: 1.45;
       }
 
       code {
         display: block;
-        border: 1px solid #223049;
-        border-radius: 8px;
-        margin-top: 14px;
-        padding: 12px;
         overflow-x: auto;
         color: var(--green);
-        background: #05070c;
         font-family: "Cascadia Code", Consolas, monospace;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .deck {
+        border: 1px solid rgba(85, 215, 232, 0.24);
+        border-radius: 8px;
+        background:
+          linear-gradient(180deg, rgba(21, 31, 39, 0.96), rgba(10, 15, 21, 0.96)),
+          var(--surface);
+        box-shadow: 0 24px 70px var(--shadow);
+        overflow: hidden;
+      }
+
+      .deck-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 56px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 16px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+      }
+
+      .deck-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 16px;
+      }
+
+      .tile {
+        min-height: 74px;
+        border: 1px solid #253542;
+        border-radius: 8px;
+        padding: 12px;
+        background: #0a1016;
+      }
+
+      .tile span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tile strong {
+        display: block;
+        margin-top: 8px;
+        color: var(--cyan);
+        font-size: 18px;
+      }
+
+      .tile.green strong {
+        color: var(--green);
+      }
+
+      .tile.amber strong {
+        color: var(--amber);
+      }
+
+      .tile.violet strong {
+        color: var(--violet);
+      }
+
+      .terminal {
+        border-top: 1px solid var(--line);
+        padding: 16px;
+        background: #05080b;
+      }
+
+      .terminal code {
+        white-space: pre-wrap;
+        line-height: 1.55;
+      }
+
+      .status-band {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        padding: 8px 0 28px;
+      }
+
+      .stat {
+        border: 1px solid rgba(215, 225, 221, 0.14);
+        border-radius: 8px;
+        padding: 14px;
+        background: rgba(17, 24, 32, 0.72);
+      }
+
+      .stat span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      .stat strong {
+        display: block;
+        margin-top: 6px;
+        color: var(--soft);
+        word-break: break-word;
+      }
+
+      .section {
+        padding: 32px 0;
+        border-top: 1px solid rgba(85, 215, 232, 0.16);
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 16px;
+      }
+
+      .section h2 {
+        margin-bottom: 0;
+        font-size: clamp(26px, 4vw, 42px);
+      }
+
+      .section-head p {
+        max-width: 520px;
+        margin-bottom: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .install-grid,
+      .feature-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .install-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .feature-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .card {
+        min-width: 0;
+        border: 1px solid rgba(215, 225, 221, 0.14);
+        border-radius: 8px;
+        padding: 17px;
+        background: rgba(17, 24, 32, 0.82);
+      }
+
+      .card h3 {
+        margin-bottom: 8px;
+        font-size: 19px;
+      }
+
+      .card p {
+        margin-bottom: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .card code {
+        margin-top: 12px;
+        border: 1px solid #253542;
+        border-radius: 8px;
+        padding: 12px;
+        background: #05080b;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        border: 1px solid rgba(242, 194, 91, 0.32);
+        border-radius: 8px;
+        margin-top: 12px;
+        padding: 16px;
+        background: rgba(53, 40, 18, 0.42);
+      }
+
+      .callout p {
+        margin: 0;
+        color: #f3dfb2;
+        line-height: 1.5;
       }
 
       footer {
+        border-top: 1px solid rgba(85, 215, 232, 0.16);
+        padding: 22px 0 34px;
         color: var(--muted);
-        padding: 24px 0 8px;
+        line-height: 1.55;
       }
 
-      @media (max-width: 880px) {
-        header,
-        .grid {
+      @media (max-width: 980px) {
+        .hero {
+          min-height: auto;
           grid-template-columns: 1fr;
         }
 
-        header {
-          min-height: auto;
-          padding: 36px 0 56px;
+        .status-band,
+        .feature-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .install-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .shell {
+          width: min(100% - 20px, 560px);
+        }
+
+        .topbar,
+        .section-head,
+        .callout {
+          align-items: stretch;
+          flex-direction: column;
+          grid-template-columns: 1fr;
+        }
+
+        .nav {
+          width: 100%;
+          overflow-x: auto;
+          padding-bottom: 8px;
+        }
+
+        .hero {
+          padding-top: 32px;
+        }
+
+        .actions,
+        .command-strip,
+        .status-band,
+        .feature-grid,
+        .deck-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .actions {
+          display: grid;
+        }
+
+        .button {
+          width: 100%;
         }
       }
     </style>
   </head>
   <body>
     <main class="shell">
-      <header>
-        <section>
-          <p class="eyebrow">Linux and Windows field deck</p>
+      <nav class="topbar" aria-label="NightGrid navigation">
+        <a class="brand" href="#top" aria-label="NightGrid Cyberdeck home">
+          <img src="icon.svg" alt="" />
+          <span>NightGrid Cyberdeck</span>
+        </a>
+        <div class="nav">
+          <a href="#install">Install</a>
+          <a href="#features">Features</a>
+          <a href="#remote-link">T-Dongle</a>
+          <a href="https://github.com/Its-ze/nightgrid-cyberdeck" rel="noopener">GitHub</a>
+        </div>
+      </nav>
+
+      <section id="top" class="hero">
+        <div>
+          <p class="eyebrow">Local USB field console</p>
           <h1>NightGrid Cyberdeck</h1>
           <p class="lede">
-            A dark USB command cockpit for Heltec V3 mesh boards, LilyGO T-Deck radios, LILYGO T-Dongle bridge boards,
-            ESP32 modules, Flipper Zero, GPS modules, Raspberry Pi Picos, and serial consoles. Scan ports, probe NMEA output,
-            record continuous Heltec V3 War Drive node sightings with GPS stamps, buffer split T-Dongle USB heartbeats, check and open the T-Dongle GUI, connect the T-Dongle
-            to the T-Deck remotely, push a GPS fix through the T-Dongle bridge, run Flipper and Pico quick commands,
-            open curated marketplace packs, and bridge into Meshtastic from one local app.
+            A desktop command deck for mesh radios, ESP32 boards, T-Dongle bridge work, GPS receivers, Flipper Zero,
+            Pico consoles, and serial devices. It runs locally and keeps serial traffic, mesh output, GPS fixes, and War
+            Drive logs on your machine.
           </p>
-          <div class="actions">
-            <a class="button primary" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.AppImage">Download Linux AppImage</a>
-            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.deb">Download Linux deb</a>
-            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Windows-x64-Setup.exe">Download Windows Setup</a>
-            <a class="button" href="install-linux.sh">Linux Update Script</a>
-            <a class="button" href="uninstall-linux.sh">Linux Uninstall Script</a>
-            <a class="button" href="uninstall-windows.ps1">Windows Uninstall Script</a>
-            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck">View GitHub</a>
+          <div class="actions" aria-label="Download NightGrid">
+            <a class="button primary" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.AppImage">Linux AppImage</a>
+            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Linux-x64.deb">Linux deb</a>
+            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest/download/NightGrid-Cyberdeck-Windows-x64-Setup.exe">Windows Setup</a>
+            <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck/releases/latest" rel="noopener">Latest release</a>
           </div>
-        </section>
-        <section class="deck-screen" aria-label="NightGrid feature preview">
-          <div class="screen-top">
-            <span>NIGHTGRID 0.1.26</span>
-            <span>LOCAL USB</span>
+          <div class="command-strip" aria-label="Quick install commands">
+            <div class="command">
+              <span>Linux quick install</span>
+              <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
+            </div>
+            <div class="command">
+              <span>Windows quick install</span>
+              <code>irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex</code>
+            </div>
           </div>
-          <div class="readout">
-            <div><span>Updater</span><strong>Install / uninstall</strong></div>
-            <div><span>App icon</span><strong>Launcher fixed</strong></div>
-            <div><span>Serial logs</span><strong>Clean lines</strong></div>
-            <div><span>Command Deck</span><strong>Macros / log tools</strong></div>
-            <div><span>Marketplace</span><strong>Tabbed packs</strong></div>
-            <div><span>Mesh CLI</span><strong>Managed venv</strong></div>
-            <div><span>Heltec V3</span><strong>War Drive</strong></div>
-            <div><span>War logs</span><strong>JSONL / CSV</strong></div>
-            <div><span>ESP32 module</span><strong>Auto connect</strong></div>
-            <div><span>ESP32 Remote</span><strong>REPL / JSON Link</strong></div>
-            <div><span>Flasher</span><strong>T-Deck / ESP32-S3</strong></div>
-            <div><span>T-Deck Link</span><strong>ESP32 serial bridge</strong></div>
-            <div><span>T-Deck / T-Dongle</span><strong>ESP32-S3 USB ready</strong></div>
-            <div><span>T-Dongle GUI</span><strong>Buffered USB / join AP</strong></div>
-            <div><span>Wireless bridge</span><strong>Pair / payload / text</strong></div>
-            <div><span>Flipper Zero</span><strong>USB CLI keys</strong></div>
-            <div><span>GPS NMEA</span><strong>Cached fix</strong></div>
-            <div><span>Linux deb</span><strong>Lid stays awake</strong></div>
-          </div>
-        </section>
-      </header>
+        </div>
 
-      <section class="grid">
-        <article class="card">
-          <h2>Linux Install / Update</h2>
-          <p>Downloads the latest AppImage, uses a writable per-user fallback if needed, installs the launcher icon, and creates a managed Meshtastic CLI venv for Mesh commands.</p>
-          <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
-        </article>
-        <article class="card">
-          <h2>Windows Install / Update</h2>
-          <p>Downloads a fresh Windows setup executable and launches the installer/updater.</p>
-          <code>irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex</code>
-        </article>
-        <article class="card">
-          <h2>USB Notes</h2>
-          <p>On Linux, add your user to the serial group if ports cannot open. Meshtastic firmware logs are line-buffered and stripped of ANSI color codes.</p>
-          <code>sudo usermod -aG dialout "$USER"</code>
-        </article>
-        <article class="card">
-          <h2>Heltec V3 War Drive</h2>
-          <p>Continuously polls the selected Heltec V3 or Meshtastic receiver while you move, requires GPS by default, stamps node sightings with cached USB GPS fixes, and saves local JSONL/CSV logs.</p>
-          <code>Start / Poll now / Require GPS / Save log</code>
-        </article>
-        <article class="card">
-          <h2>Linux Deb Lid Mode</h2>
-          <p>The deb package installs a NightGrid-owned systemd-logind drop-in so your mobile deck keeps running with the laptop lid closed, then removes it on package removal.</p>
-          <code>/etc/systemd/logind.conf.d/nightgrid-cyberdeck-lid.conf</code>
-        </article>
-        <article class="card">
-          <h2>Command Deck</h2>
-          <p>Macro buttons, richer status tiles, RX/TX/status log filters, copy logs, clear logs, and selected-device quick actions.</p>
-          <code>Selected help / Mesh nodes / GPS push / ESP32 ping</code>
-        </article>
-        <article class="card">
-          <h2>Marketplace</h2>
-          <p>Tabbed pack browser with Featured, All, T-Deck, T-Dongle, ESP32, Smart, Firmware, and Lab lanes plus Source, Grab, Auto setup, and Run actions.</p>
-          <code>WLED / ESPHome / CircuitPython / ESP-NOW / Matter</code>
-        </article>
-        <article class="card">
-          <h2>ESP32 Module</h2>
-          <p>Auto-connects generic ESP32 serial modules and exposes reset, bootloader, Ctrl-C/Ctrl-D, help, file-list, remote-control, and T-Deck Link actions.</p>
-          <code>CP210x / CH340 / Espressif USB serial</code>
-        </article>
-        <article class="card">
-          <h2>ESP32 Remote</h2>
-          <p>Links a selected ESP32 to the computer, then sends identify, heartbeat, Wi-Fi scan, I2C scan, GPIO write, and custom commands over REPL or JSON Link.</p>
-          <code>Link host / Identify / GPIO write / Run</code>
-        </article>
-        <article class="card">
-          <h2>Flasher</h2>
-          <p>Targets T-Deck, ESP32-S3, ESP32, and T-Dongle serial boards with public web flasher links plus connect, reset, and bootloader controls.</p>
-          <code>Open flasher / Firmware / Bootloader / Reset</code>
-        </article>
-        <article class="card">
-          <h2>T-Deck Link</h2>
-          <p>Sends CyberDeck Link probe, pair, deck-ready, launcher, and text JSON events through the selected ESP32 serial module.</p>
-          <code>{"cmd":"attachProbe","deckId":"itsz-tdeck"}</code>
-        </article>
-        <article class="card">
-          <h2>T-Dongle Bridge</h2>
-          <p>Uses the CyberDeck Link USB serial protocol to buffer fragmented attach heartbeats, show USB and pairing status, check the T-Dongle GUI, open Wi-Fi settings, write the bridge URL, start/finish pairing, queue remote payloads, and send text/control events to a T-Deck.</p>
-          <code>{"cmd":"attachProbe","deckId":"itsz-tdeck","deckName":"ITSZ T-Deck"}</code>
-        </article>
-        <article class="card">
-          <h2>T-Deck Remote Link</h2>
-          <p>Guided Check GUI, Wi-Fi settings, Start link, and Finish link controls distinguish USB-alive from Wi-Fi-unjoined, keep split dongle JSON out of the RX log, report failed Command Deck actions correctly, and wake the T-Deck launcher.</p>
-          <code>CyberDeck-Link / http://192.168.4.1</code>
-        </article>
-        <article class="card">
-          <h2>GPS Probe / Push</h2>
-          <p>Pick a USB GPS serial port, probe for live NMEA sentences at the selected baud, connect the parser, then push cached fixes to the T-Dongle bridge.</p>
-          <code>{"cmd":"text","text":"GPS 38.897957,-77.036560 sat=9"}</code>
-        </article>
-        <article class="card">
-          <h2>Linux Uninstall</h2>
-          <p>Removes the AppImage from standard and fallback locations, plus the launcher and installed deb package if present. App settings are preserved unless you opt into purge.</p>
-          <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/uninstall-linux.sh | bash</code>
-        </article>
-        <article class="card">
-          <h2>Windows Uninstall</h2>
-          <p>Finds the registered NightGrid uninstaller and runs it, then cleans standard shortcuts.</p>
-          <code>irm https://its-ze.github.io/nightgrid-cyberdeck/uninstall-windows.ps1 | iex</code>
-        </article>
+        <aside class="deck" aria-label="NightGrid console preview">
+          <div class="deck-header">
+            <span>NIGHTGRID 0.1.26</span>
+            <span>USB LOCAL</span>
+          </div>
+          <div class="deck-grid">
+            <div class="tile green"><span>Deck state</span><strong>Ready</strong></div>
+            <div class="tile"><span>Serial roles</span><strong>8 lanes</strong></div>
+            <div class="tile amber"><span>War Drive</span><strong>GPS gated</strong></div>
+            <div class="tile violet"><span>T-Dongle</span><strong>Bridge GUI</strong></div>
+            <div class="tile"><span>ESP32 remote</span><strong>REPL / JSON</strong></div>
+            <div class="tile green"><span>Marketplace</span><strong>Pack tabs</strong></div>
+          </div>
+          <div class="terminal">
+            <code>&gt; scan ports
+heltec-v3: ready
+t-deck: serial mesh
+t-dongle: cyberdeck-link-v0
+gps: cached fix available</code>
+          </div>
+        </aside>
       </section>
+
+      <section class="status-band" aria-label="Release status">
+        <div class="stat">
+          <span>Latest</span>
+          <strong id="releaseVersion">Checking release...</strong>
+        </div>
+        <div class="stat">
+          <span>Linux</span>
+          <strong>AppImage + deb</strong>
+        </div>
+        <div class="stat">
+          <span>Windows</span>
+          <strong>NSIS setup</strong>
+        </div>
+        <div class="stat">
+          <span>Privacy</span>
+          <strong>Local serial workflow</strong>
+        </div>
+      </section>
+
+      <section id="install" class="section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Install / update</p>
+            <h2>One page, all supported installers.</h2>
+          </div>
+          <p>Direct release assets are available for manual downloads. Script installers update in place and keep the install path predictable.</p>
+        </div>
+        <div class="install-grid">
+          <article class="card">
+            <h3>Linux AppImage</h3>
+            <p>Portable desktop build. The script installs or updates it in a writable user location and refreshes the launcher icon.</p>
+            <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/install-linux.sh | bash</code>
+          </article>
+          <article class="card">
+            <h3>Linux deb</h3>
+            <p>Debian/Ubuntu package with a NightGrid-owned lid-close policy so a mobile workstation can keep running closed.</p>
+            <code>sudo apt install ./NightGrid-Cyberdeck-Linux-x64.deb</code>
+          </article>
+          <article class="card">
+            <h3>Windows Setup</h3>
+            <p>Downloads the latest setup executable and launches the updater. Close NightGrid first if the installer asks.</p>
+            <code>irm https://its-ze.github.io/nightgrid-cyberdeck/install-windows.ps1 | iex</code>
+          </article>
+        </div>
+        <div class="callout">
+          <p>Linux USB access may require the `dialout`, `uucp`, or `plugdev` group. Meshtastic CLI commands need exclusive access to the selected radio port.</p>
+          <a class="button" href="https://github.com/Its-ze/nightgrid-cyberdeck#linux-usb-access" rel="noopener">USB setup notes</a>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Deck surface</p>
+            <h2>Built for repeated device work.</h2>
+          </div>
+          <p>NightGrid keeps port scanning, serial sessions, command macros, and board-specific setup paths in one dense workspace.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="card">
+            <h3>Serial scanner</h3>
+            <p>Role hints for Heltec V3, T-Deck, T-Dongle, ESP32, Flipper, Pico, GPS, CP210x, CH340, and Espressif USB serial.</p>
+          </article>
+          <article class="card">
+            <h3>Command Deck</h3>
+            <p>Selected-device macros for help, status, mesh nodes, GPS push, T-Dongle status, ESP32 ping, and memory checks.</p>
+          </article>
+          <article class="card">
+            <h3>Marketplace</h3>
+            <p>Tabbed packs for T-Deck, T-Dongle, ESP32, WLED, ESPHome, MicroPython, CircuitPython, ESP-NOW, LVGL, Matter, and more.</p>
+          </article>
+          <article class="card">
+            <h3>War Drive</h3>
+            <p>Passive Meshtastic node sightings with GPS-stamped JSONL/CSV logs. Require GPS is on by default.</p>
+          </article>
+          <article class="card">
+            <h3>ESP32 Remote</h3>
+            <p>Identify, heartbeat, Wi-Fi scan, I2C scan, GPIO write, and custom commands over MicroPython REPL or newline JSON Link.</p>
+          </article>
+          <article class="card">
+            <h3>Flasher lane</h3>
+            <p>Open firmware pages, connect selected serial ports, reset boards, and place ESP32 targets into bootloader mode.</p>
+          </article>
+          <article class="card">
+            <h3>GPS panel</h3>
+            <p>Probe NMEA receivers, cache fixes, and push a fix to the selected T-Dongle bridge when you choose.</p>
+          </article>
+          <article class="card">
+            <h3>Local safety</h3>
+            <p>No cloud relay for serial logs, mesh output, GPS coordinates, or War Drive files. Review logs before publishing them.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="remote-link" class="section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">T-Dongle bridge</p>
+            <h2>Pair the dongle without guessing.</h2>
+          </div>
+          <p>The wireless bridge panel separates USB-alive, Wi-Fi AP join, GUI reachability, profile save, pairing, and payload steps.</p>
+        </div>
+        <div class="install-grid">
+          <article class="card">
+            <h3>Probe GUI</h3>
+            <p>Reads the CyberDeck Link attach heartbeat, buffers split JSON frames, and reports the AP and GUI URL.</p>
+            <code>{"cmd":"attachProbe"}</code>
+          </article>
+          <article class="card">
+            <h3>Start link</h3>
+            <p>Writes the bridge URL, saves the T-Deck profile mirror, triggers the pair popup, and begins pairing.</p>
+            <code>{"cmd":"pairBegin","deckId":"itsz-tdeck"}</code>
+          </article>
+          <article class="card">
+            <h3>Finish link</h3>
+            <p>Confirms the pair code, sends deck-ready, refreshes launchers, and opens the T-Dongle GUI when reachable.</p>
+            <code>CyberDeck-Link / http://192.168.4.1</code>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Remove cleanly</p>
+            <h2>Uninstall without losing local data by accident.</h2>
+          </div>
+          <p>Uninstall scripts preserve app settings by default. Set the documented purge flag only when you intentionally want local settings removed.</p>
+        </div>
+        <div class="install-grid">
+          <article class="card">
+            <h3>Linux uninstall</h3>
+            <code>curl -fsSL https://its-ze.github.io/nightgrid-cyberdeck/uninstall-linux.sh | bash</code>
+          </article>
+          <article class="card">
+            <h3>Windows uninstall</h3>
+            <code>irm https://its-ze.github.io/nightgrid-cyberdeck/uninstall-windows.ps1 | iex</code>
+          </article>
+          <article class="card">
+            <h3>Source</h3>
+            <p>Read release notes, report issues, or inspect installer scripts before running them.</p>
+            <p><a href="https://github.com/Its-ze/nightgrid-cyberdeck" rel="noopener">github.com/Its-ze/nightgrid-cyberdeck</a></p>
+          </article>
+        </div>
+      </section>
+
       <footer>
-        NightGrid runs locally. Serial traffic, mesh output, War Drive logs, and GPS coordinates stay on your machine unless you copy, send, save, or push them.
+        NightGrid Cyberdeck runs locally. Serial traffic, mesh output, War Drive logs, and GPS coordinates stay on your machine unless you copy, send, save, or push them.
       </footer>
     </main>
+    <script>
+      const releaseVersion = document.getElementById("releaseVersion");
+
+      async function loadRelease() {
+        try {
+          const response = await fetch("https://api.github.com/repos/Its-ze/nightgrid-cyberdeck/releases/latest", {
+            headers: { Accept: "application/vnd.github+json" }
+          });
+          if (!response.ok) throw new Error("release lookup failed");
+          const release = await response.json();
+          releaseVersion.textContent = release.tag_name || "Latest release";
+        } catch (error) {
+          releaseVersion.textContent = "Latest release";
+        }
+      }
+
+      loadRelease();
+    </script>
   </body>
 </html>
